@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from api.core.database import get_db
 from api.middleware.auth import get_current_user, require_admin, require_power_or_admin
+from api.middleware.cache import (
+    get_shared_run, set_shared_run, invalidate_shared_run,
+    get_analytics, set_analytics, invalidate_analytics,
+    invalidate_all_agent_configs_for_org,
+)
 from api.models import orm, schemas
 from api.services import auth_service, run_service
 
@@ -172,6 +177,10 @@ async def submit_feedback(
     db.add(orm.UsageEvent(user_id=current_user.id, org_id=current_user.org_id,
                           event_type="feedback_submitted", run_id=run_id))
     await db.flush()
+
+    # Feedback changes analytics — bust the org analytics cache
+    invalidate_analytics(current_user.org_id)
+
     return fb
 
 @feedback_router.get("/runs/{run_id}/feedback", response_model=schemas.FeedbackOut)
@@ -261,7 +270,7 @@ async def create_share(
     db: AsyncSession = Depends(get_db),
     current_user: orm.User = Depends(get_current_user),
 ):
-    run = await run_service.get_run_or_404(run_id, current_user.id, db)
+    await run_service.get_run_or_404(run_id, current_user.id, db)
     share = orm.DecisionShare(
         run_id=run_id,
         shared_by=current_user.id,
@@ -296,10 +305,18 @@ async def revoke_share(
     share = result.scalar_one_or_none()
     if not share:
         raise HTTPException(status_code=404, detail="No share found")
+    # Immediately bust the cache so the token stops working
+    invalidate_shared_run(share.share_token)
     await db.delete(share)
 
 @shares_router.get("/shared/{share_token}", response_model=schemas.RunOut)
 async def view_shared(share_token: str, db: AsyncSession = Depends(get_db)):
+    # ── Cache read ────────────────────────────────────────────────────────────
+    cached_run = get_shared_run(share_token)
+    if cached_run is not None:
+        return cached_run
+
+    # ── DB fetch on cache miss ────────────────────────────────────────────────
     result = await db.execute(
         select(orm.DecisionShare).where(orm.DecisionShare.share_token == share_token)
     )
@@ -308,8 +325,15 @@ async def view_shared(share_token: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Share not found")
     if share.expires_at and share.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         raise HTTPException(status_code=410, detail="Share link has expired")
+
     run_result = await db.execute(select(orm.DecisionRun).where(orm.DecisionRun.id == share.run_id))
-    return run_result.scalar_one()
+    run = run_result.scalar_one()
+
+    # Only cache completed runs — pending/running runs change frequently
+    if run.status == orm.RunStatus.done:
+        set_shared_run(share_token, run)
+
+    return run
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
@@ -321,6 +345,12 @@ async def personal_analytics(
     db: AsyncSession = Depends(get_db),
     current_user: orm.User = Depends(get_current_user),
 ):
+    # Personal analytics cached per user (stored under org_id=user_id key)
+    cache_key = f"personal:{current_user.id}"
+    cached = get_analytics(current_user.id, "me")
+    if cached is not None:
+        return cached
+
     total = await db.scalar(
         select(func.count()).select_from(orm.DecisionRun).where(orm.DecisionRun.triggered_by == current_user.id)
     )
@@ -334,7 +364,6 @@ async def personal_analytics(
         .order_by(func.count().desc())
         .limit(1)
     )
-    from datetime import date
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0)
     runs_month = await db.scalar(
         select(func.count()).select_from(orm.DecisionRun).where(
@@ -342,18 +371,24 @@ async def personal_analytics(
             orm.DecisionRun.created_at >= month_start,
         )
     )
-    return schemas.PersonalAnalyticsOut(
+    out = schemas.PersonalAnalyticsOut(
         total_runs=total or 0,
         avg_rating_given=round(float(avg_r), 2) if avg_r else None,
         most_trusted_agent=top_agent,
         runs_this_month=runs_month or 0,
     )
+    set_analytics(current_user.id, "me", out)
+    return out
 
 @analytics_router.get("/org", response_model=schemas.OrgAnalyticsOut)
 async def org_analytics(
     db: AsyncSession = Depends(get_db),
     current_user: orm.User = Depends(get_current_user),
 ):
+    cached = get_analytics(current_user.org_id, "org")
+    if cached is not None:
+        return cached
+
     total = await db.scalar(
         select(func.count()).select_from(orm.DecisionRun)
         .join(orm.Problem, orm.DecisionRun.problem_id == orm.Problem.id)
@@ -377,25 +412,31 @@ async def org_analytics(
         .order_by(desc(orm.AgentTrustScore.times_chosen))
         .limit(1)
     )
-    return schemas.OrgAnalyticsOut(
+    out = schemas.OrgAnalyticsOut(
         total_runs=total or 0,
         active_users=active_users or 0,
         most_trusted_agent=top_agent,
         avg_rating=round(float(avg_r), 2) if avg_r else None,
     )
+    set_analytics(current_user.org_id, "org", out)
+    return out
 
 @analytics_router.get("/org/agents", response_model=list[schemas.AgentTrustOut])
 async def org_agent_trust(
     db: AsyncSession = Depends(get_db),
     current_user: orm.User = Depends(get_current_user),
 ):
+    cached = get_analytics(current_user.org_id, "org_agents")
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(orm.AgentTrustScore)
         .where(orm.AgentTrustScore.org_id == current_user.org_id)
         .order_by(desc(orm.AgentTrustScore.period), orm.AgentTrustScore.agent_name)
     )
     scores = result.scalars().all()
-    return [
+    out = [
         schemas.AgentTrustOut(
             agent_name=s.agent_name,
             period=str(s.period),
@@ -406,6 +447,8 @@ async def org_agent_trust(
         )
         for s in scores
     ]
+    set_analytics(current_user.org_id, "org_agents", out)
+    return out
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
@@ -517,13 +560,6 @@ async def admin_activate_config(
     if not config or config.org_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Config not found")
 
-    await db.execute(
-        select(orm.AgentConfig).where(
-            orm.AgentConfig.agent_name == config.agent_name,
-            orm.AgentConfig.org_id == current_user.org_id,
-            orm.AgentConfig.is_active == True,
-        )
-    )
     prev_result = await db.execute(
         select(orm.AgentConfig).where(
             orm.AgentConfig.agent_name == config.agent_name,
@@ -535,6 +571,11 @@ async def admin_activate_config(
         prev.is_active = False
 
     config.is_active = True
+
+    # Bust cache for every agent in this org — a new active config must be
+    # picked up immediately by the next run, not after TTL expires
+    invalidate_all_agent_configs_for_org(current_user.org_id)
+
     return config
 
 @admin_router.get("/agent-configs/{config_id}/runs", response_model=list[schemas.RunOut])

@@ -63,6 +63,7 @@ async def aggregate_trust_scores() -> None:
     Roll up yesterday's feedback into agent_trust_scores.
     One row per (org_id, agent_name, date).
     Idempotent — ON CONFLICT DO NOTHING means reruns are safe.
+    After writing, busts analytics cache so dashboards reflect new data immediately.
     """
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -99,6 +100,11 @@ async def aggregate_trust_scores() -> None:
         await db.commit()
         print(f"[scheduler] aggregate_trust_scores: inserted {result.rowcount} rows")
 
+    # Bust analytics cache for all orgs — trust scores changed
+    from api.middleware.cache import invalidate_all_analytics
+    invalidate_all_analytics()
+    print("[scheduler] analytics cache invalidated after trust score aggregation")
+
 
 # ── Scheduler setup ───────────────────────────────────────────────────────────
 
@@ -111,7 +117,7 @@ def register_jobs() -> None:
         trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
         id="purge_standard_logs",
         replace_existing=True,
-        misfire_grace_time=3600,    # if the server was down at 02:00, run within 1h
+        misfire_grace_time=3600,
     )
 
     # Purge error logs — daily at 02:05 UTC (offset to avoid lock contention)

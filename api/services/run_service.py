@@ -6,20 +6,57 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from api.models.orm import Problem, DecisionRun, AgentOutput, AgentConfig, UsageEvent, RunStatus, Visibility
 from api.models.schemas import RunCreate
+from api.middleware.cache import (
+    get_agent_config, set_agent_config,
+    get_analytics, set_analytics,
+)
 import httpx
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_active_configs(db: AsyncSession, org_id: str | None) -> dict[str, AgentConfig]:
+    """
+    Load active agent configs for an org.
+    Checks the in-process TTL cache first (5 min TTL) before hitting Postgres.
+    Each agent is cached individually so a single activation only busts one entry.
+    """
+    from api.core.config import settings
+
+    agent_names = ["sales", "operations", "finance", "hades"]
+    configs: dict[str, AgentConfig] = {}
+    uncached: list[str] = []
+
+    # ── Cache read pass ───────────────────────────────────────────────────────
+    for name in agent_names:
+        cached = get_agent_config(org_id, name)
+        if cached is not None:
+            configs[name] = cached
+        else:
+            uncached.append(name)
+
+    if not uncached:
+        return configs
+
+    # ── DB fetch for cache misses ─────────────────────────────────────────────
     result = await db.execute(
         select(AgentConfig).where(
             AgentConfig.is_active == True,
             AgentConfig.org_id == org_id,
+            AgentConfig.agent_name.in_(uncached),
         )
     )
-    configs = result.scalars().all()
-    return {c.agent_name: c for c in configs}
+    fetched = result.scalars().all()
+    fetched_map = {c.agent_name: c for c in fetched}
+
+    for name in uncached:
+        if name in fetched_map:
+            configs[name] = fetched_map[name]
+            set_agent_config(org_id, name, fetched_map[name])
+        # If no active config exists for this agent, we leave it out of configs
+        # and _cfg() will fall back to defaults — no need to cache a None sentinel
+
+    return configs
 
 
 async def _call_ollama(host: str, model: str, prompt: str, temperature: float, max_tokens: int) -> tuple[str, int]:
@@ -71,7 +108,6 @@ async def create_run(problem_id: str, req: RunCreate, user_id: str, org_id: str 
     event = UsageEvent(user_id=user_id, org_id=org_id, event_type="run_triggered", run_id=run.id)
     db.add(event)
 
-    # Fire-and-forget — execution runs in background
     asyncio.create_task(_execute_run(run.id, org_id))
 
     return run
@@ -82,7 +118,7 @@ async def get_run_or_404(run_id: str, user_id: str, db: AsyncSession) -> Decisio
     run = result.scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    problem = await get_problem_or_404(run.problem_id, user_id, db)
+    await get_problem_or_404(run.problem_id, user_id, db)
     return run
 
 
@@ -106,9 +142,8 @@ async def get_agent_outputs(run_id: str, user_id: str, db: AsyncSession) -> list
 
 async def _execute_run(run_id: str, org_id: str | None) -> None:
     """
-    Runs outside the request context. Opens its own DB session.
-    Executes the four-agent pipeline sequentially (mirroring the original LangGraph flow)
-    and writes all outputs to the database.
+    Runs outside the request context — opens its own DB session.
+    Uses cached agent configs where available, falls back to defaults.
     """
     from api.core.database import AsyncSessionLocal
     from api.core.config import settings
@@ -120,6 +155,7 @@ async def _execute_run(run_id: str, org_id: str | None) -> None:
             run.status = RunStatus.running
             await db.commit()
 
+            # Uses cache internally — only hits DB for cache misses
             configs = await _get_active_configs(db, org_id)
 
             def _cfg(name: str) -> tuple[str, str, float, int]:
@@ -145,15 +181,14 @@ async def _execute_run(run_id: str, org_id: str | None) -> None:
                 state[agent_name] = output
 
                 config_id = configs[agent_name].id if agent_name in configs else None
-                ao = AgentOutput(
+                db.add(AgentOutput(
                     run_id=run.id,
                     agent_name=agent_name,
                     agent_config_id=config_id,
                     prompt_used=prompt,
                     raw_output=output,
                     latency_ms=latency_ms,
-                )
-                db.add(ao)
+                ))
 
             model, system_prompt, temperature, max_tokens = _cfg("hades")
             hades_prompt = _build_hades_prompt(state, system_prompt)
@@ -176,7 +211,7 @@ async def _execute_run(run_id: str, org_id: str | None) -> None:
             run.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
-        except Exception as exc:
+        except Exception:
             await db.rollback()
             run_result = await db.execute(select(DecisionRun).where(DecisionRun.id == run_id))
             run = run_result.scalar_one_or_none()
