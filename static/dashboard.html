@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Judges of Hades</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .dash-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; align-items: start; }
+    .problem-list { position: sticky; top: 72px; max-height: calc(100vh - 100px); overflow-y: auto; }
+    .problem-item {
+      padding: 0.875rem 1rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background var(--transition);
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+    }
+    .problem-item:hover { background: var(--bg-3); }
+    .problem-item.active { background: var(--bg-3); border-color: var(--border-gold); }
+    .problem-item-title { font-size: 0.875rem; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .problem-item-meta { display: flex; gap: 8px; align-items: center; }
+    .run-detail-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 1.5rem; gap: 1rem;
+    }
+    .version-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .version-pill {
+      padding: 3px 10px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 20px; font-size: 0.75rem;
+      font-family: var(--font-mono); color: var(--text-2);
+      cursor: pointer; transition: all var(--transition);
+    }
+    .version-pill:hover { border-color: var(--border-gold); color: var(--gold); }
+    .version-pill.active { background: var(--gold-glow); border-color: var(--border-gold); color: var(--gold); }
+    .share-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0.75rem 1rem;
+      background: var(--bg-3); border-radius: var(--radius);
+      margin-top: 1rem;
+    }
+    .share-url {
+      flex: 1; font-family: var(--font-mono); font-size: 0.75rem;
+      color: var(--text-2); word-break: break-all;
+    }
+    .comments-section { margin-top: 1.5rem; }
+    .comment-item {
+      padding: 0.875rem 1rem;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 8px;
+    }
+    .comment-meta { font-size: 0.75rem; color: var(--text-3); margin-bottom: 4px; font-family: var(--font-mono); }
+    .comment-body { font-size: 0.875rem; color: var(--text-2); }
+    .reply-indent { margin-left: 1.5rem; border-left: 2px solid var(--border); padding-left: 1rem; }
+    @media (max-width: 900px) {
+      .dash-layout { grid-template-columns: 1fr; }
+      .problem-list { position: static; max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nav" id="nav"></div>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle">Your problems, run history, and version comparisons.</div>
+      </div>
+      <a href="/static/index.html" class="btn btn-primary">+ New Deliberation</a>
+    </div>
+
+    <div class="dash-layout">
+      <!-- Problem list -->
+      <div>
+        <div class="flex-between mb-1">
+          <span class="text-xs text-dim mono" style="text-transform:uppercase;letter-spacing:.06em">Problems</span>
+          <select class="select" id="vis-filter" style="width:auto;height:28px;font-size:0.75rem" onchange="loadProblems()">
+            <option value="">All</option>
+            <option value="private">Private</option>
+            <option value="org">Org</option>
+            <option value="public">Public</option>
+          </select>
+        </div>
+        <div id="problem-list" class="problem-list">
+          <div class="loading-row"><div class="spinner"></div> Loading…</div>
+        </div>
+      </div>
+
+      <!-- Run detail -->
+      <div id="run-detail">
+        <div class="empty">
+          <div class="empty-icon">⌂</div>
+          <div class="empty-title">Select a problem</div>
+          <div class="empty-sub">Choose a problem from the left to view its runs.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    if (!Auth.requireLogin()) throw '';
+    renderNav('dashboard');
+
+    let activeProblemId = null;
+    let activeRunId = null;
+
+    async function loadProblems() {
+      const vis = document.getElementById('vis-filter').value;
+      const url = `/problems?page_size=50${vis ? `&visibility=${vis}` : ''}`;
+      document.getElementById('problem-list').innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+      try {
+        const problems = await api.get(url);
+        if (!problems.length) {
+          document.getElementById('problem-list').innerHTML = `
+            <div class="empty"><div class="empty-sub">No problems yet. <a href="/static/index.html">Create one.</a></div></div>`;
+          return;
+        }
+        document.getElementById('problem-list').innerHTML = problems.map(p => `
+          <div class="problem-item ${p.id === activeProblemId ? 'active' : ''}"
+               onclick="selectProblem('${p.id}', this)">
+            <div class="problem-item-title">${p.title}</div>
+            <div class="problem-item-meta">
+              ${visibilityBadge(p.visibility)}
+              <span class="text-xs text-dim">${timeAgo(p.created_at)}</span>
+            </div>
+          </div>`).join('');
+      } catch { document.getElementById('problem-list').innerHTML = `<div class="alert alert-error">Failed to load.</div>`; }
+    }
+
+    async function selectProblem(id, el) {
+      document.querySelectorAll('.problem-item').forEach(e => e.classList.remove('active'));
+      el.classList.add('active');
+      activeProblemId = id;
+      await loadRuns(id);
+    }
+
+    async function loadRuns(problemId) {
+      document.getElementById('run-detail').innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+      try {
+        const runs = await api.get(`/problems/${problemId}/runs`);
+        if (!runs.length) {
+          document.getElementById('run-detail').innerHTML = `
+            <div class="empty"><div class="empty-sub">No runs yet. <a href="/static/index.html">Start one.</a></div></div>`;
+          return;
+        }
+        renderRunsHeader(problemId, runs);
+        await selectRun(runs[0].id);
+      } catch { document.getElementById('run-detail').innerHTML = `<div class="alert alert-error">Failed to load runs.</div>`; }
+    }
+
+    function renderRunsHeader(problemId, runs) {
+      const pills = runs.map(r => `
+        <span class="version-pill ${r.id === activeRunId ? 'active' : ''}"
+              id="pill-${r.id}" onclick="selectRun('${r.id}')">
+          v${r.version} ${statusBadge(r.status)}
+        </span>`).join('');
+
+      const el = document.getElementById('run-detail');
+      if (!el.querySelector('.version-pills')) {
+        const header = document.createElement('div');
+        header.className = 'run-detail-header';
+        header.id = 'run-detail-header';
+        header.innerHTML = `<div class="version-pills" id="version-pills">${pills}</div>`;
+        el.prepend(header);
+      } else {
+        document.getElementById('version-pills').innerHTML = pills;
+      }
+    }
+
+    async function selectRun(runId) {
+      activeRunId = runId;
+      document.querySelectorAll('.version-pill').forEach(p => {
+        p.classList.toggle('active', p.id === `pill-${runId}`);
+      });
+
+      const container = document.getElementById('run-detail');
+      let body = container.querySelector('#run-body');
+      if (!body) {
+        body = document.createElement('div');
+        body.id = 'run-body';
+        container.appendChild(body);
+      }
+      body.innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+
+      try {
+        const [run, outputs] = await Promise.all([
+          api.get(`/runs/${runId}`),
+          api.get(`/runs/${runId}/agents`).catch(() => []),
+        ]);
+
+        const agentMap = {};
+        outputs.forEach(a => agentMap[a.agent_name] = a);
+
+        const agents = [
+          { key: 'sales',      label: 'Sales Strategist',     icon: 'S', cls: 'icon-sales'   },
+          { key: 'operations', label: 'Operations Strategist', icon: 'O', cls: 'icon-ops'     },
+          { key: 'finance',    label: 'Finance Strategist',    icon: 'F', cls: 'icon-finance' },
+        ];
+
+        const accordions = run.status === 'done' ? agents.map(a => {
+          const out = agentMap[a.key];
+          if (!out) return '';
+          return `
+            <div class="accordion" onclick="accordion(this)">
+              <button class="accordion-trigger">
+                <span class="accordion-label">
+                  <span class="accordion-agent-icon ${a.cls}">${a.icon}</span>${a.label}
+                </span>
+                <span class="accordion-chevron">▾</span>
+              </button>
+              <div class="accordion-body">
+                <div class="accordion-content">
+                  ${out.raw_output}
+                  <div class="accordion-meta">
+                    <span>⏱ ${out.latency_ms}ms</span>
+                    ${out.tokens_used ? `<span>◈ ${out.tokens_used} tokens</span>` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }).join('') : '';
+
+        let shareBlock = '';
+        try {
+          const share = await api.get(`/runs/${runId}/share`);
+          const url = `${location.origin}/shared/${share.share_token}`;
+          shareBlock = `
+            <div class="share-row">
+              <span class="text-xs text-dim">🔗</span>
+              <span class="share-url">${url}</span>
+              <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${url}')">Copy</button>
+              <button class="btn btn-sm btn-danger" onclick="revokeShare('${runId}')">Revoke</button>
+            </div>`;
+        } catch {
+          shareBlock = `
+            <div style="margin-top:0.75rem">
+              <button class="btn btn-secondary btn-sm" onclick="createShare('${runId}', false)">Share with Org</button>
+              <button class="btn btn-ghost btn-sm" onclick="createShare('${runId}', true)">Public Link</button>
+            </div>`;
+        }
+
+        body.innerHTML = `
+          <div class="run-meta">
+            <span><b>Run</b> v${run.version}</span>
+            <span><b>ID</b> ${run.id.slice(0,8).toUpperCase()}</span>
+            <span><b>Status</b> ${statusBadge(run.status)}</span>
+            <span><b>Started</b> ${fmtDate(run.created_at)}</span>
+            ${run.completed_at ? `<span><b>Completed</b> ${fmtDate(run.completed_at)}</span>` : ''}
+          </div>
+
+          ${run.status === 'done' ? `
+            <div class="decision-card">
+              <div class="decision-card-header">
+                <span class="decision-crown">𓂀</span>
+                <div>
+                  <div class="decision-label">Final Verdict — Hades</div>
+                </div>
+              </div>
+              <div class="decision-body">${run.final_decision}</div>
+            </div>
+            <div class="agent-grid" style="margin-bottom:1rem">${accordions}</div>
+          ` : run.status === 'running' || run.status === 'pending' ? `
+            <div class="card" style="text-align:center;padding:2rem">
+              <div class="spinner" style="margin:0 auto 1rem"></div>
+              <div class="text-muted">Council is deliberating…</div>
+            </div>
+          ` : `<div class="alert alert-error">This run failed. Please try again.</div>`}
+
+          ${shareBlock}
+
+          <div class="comments-section" id="comments-${runId}">
+            <div class="divider"></div>
+            <div class="flex-between mb-2">
+              <span class="text-xs text-dim mono" style="text-transform:uppercase;letter-spacing:.06em">Comments</span>
+            </div>
+            <div id="comment-list-${runId}"><div class="loading-row"><div class="spinner"></div></div></div>
+            <div style="display:flex;gap:8px;margin-top:1rem">
+              <textarea class="textarea" id="comment-input-${runId}" rows="2" placeholder="Add a comment…" style="flex:1;min-height:60px"></textarea>
+              <button class="btn btn-primary" onclick="postComment('${runId}')">Post</button>
+            </div>
+          </div>
+        `;
+
+        loadComments(runId);
+      } catch (e) {
+        body.innerHTML = `<div class="alert alert-error">Failed to load run details.</div>`;
+      }
+    }
+
+    async function loadComments(runId) {
+      try {
+        const comments = await api.get(`/runs/${runId}/comments`);
+        const top = comments.filter(c => !c.parent_id);
+        const children = comments.filter(c => c.parent_id);
+
+        const renderComment = (c, indent = false) => `
+          <div class="comment-item ${indent ? 'reply-indent' : ''}">
+            <div class="comment-meta">${fmtDate(c.created_at)}${c.edited_at ? ' · edited' : ''}</div>
+            <div class="comment-body">${c.body}</div>
+            <div style="margin-top:6px">
+              <button class="btn btn-ghost btn-sm" onclick="replyTo('${runId}','${c.id}')">Reply</button>
+            </div>
+          </div>
+          ${children.filter(ch => ch.parent_id === c.id).map(ch => renderComment(ch, true)).join('')}
+        `;
+
+        document.getElementById(`comment-list-${runId}`).innerHTML =
+          top.length ? top.map(c => renderComment(c)).join('') :
+          `<div class="text-dim text-sm">No comments yet.</div>`;
+      } catch {}
+    }
+
+    async function postComment(runId) {
+      const input = document.getElementById(`comment-input-${runId}`);
+      const body = input.value.trim();
+      if (!body) return;
+      try {
+        await api.post(`/runs/${runId}/comments`, { body });
+        input.value = '';
+        loadComments(runId);
+      } catch {}
+    }
+
+    function replyTo(runId, parentId) {
+      const input = document.getElementById(`comment-input-${runId}`);
+      input.focus();
+      input.dataset.parentId = parentId;
+      input.placeholder = 'Replying…';
+    }
+
+    async function createShare(runId, isPublic) {
+      try {
+        await api.post(`/runs/${runId}/share`, { is_public_link: isPublic });
+        selectRun(runId);
+      } catch {}
+    }
+
+    async function revokeShare(runId) {
+      try {
+        await api.del(`/runs/${runId}/share`);
+        selectRun(runId);
+      } catch {}
+    }
+
+    loadProblems();
+  </script>
+</body>
+</html>

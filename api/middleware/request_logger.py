@@ -1,10 +1,10 @@
 import asyncio
+import json
 import time
 import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-# Headers stripped before writing to DB — never log auth material
 _STRIP_HEADERS = {"authorization", "cookie", "x-api-key"}
 
 
@@ -16,7 +16,6 @@ def _get_client_ip(request: Request) -> str:
 
 
 def _extract_user_org(request: Request) -> tuple[str | None, str | None]:
-    """Best-effort JWT decode — returns (user_id, org_id) or (None, None)."""
     from api.core.jwt import decode_token
     auth = request.headers.get("authorization", "")
     if not auth.startswith("Bearer "):
@@ -45,6 +44,10 @@ async def _write_log(
         from api.core.database import AsyncSessionLocal
         from sqlalchemy import text
 
+        # Serialize meta as a proper JSON string — CAST(:meta AS jsonb) avoids
+        # the ::jsonb cast syntax which asyncpg cannot parse as a named parameter.
+        meta_json = json.dumps({"user_agent": user_agent})
+
         async with AsyncSessionLocal() as db:
             await db.execute(
                 text("""
@@ -53,31 +56,29 @@ async def _write_log(
                          status_code, latency_ms, ip, meta, is_error, created_at)
                     VALUES
                         (:id, :request_id, :user_id, :org_id, :method, :path,
-                         :status_code, :latency_ms, :ip, :meta::jsonb, :is_error, NOW())
+                         :status_code, :latency_ms, :ip, CAST(:meta AS jsonb), :is_error, NOW())
                 """),
                 {
-                    "id": str(uuid.uuid4()),
-                    "request_id": request_id,
-                    "user_id": user_id,
-                    "org_id": org_id,
-                    "method": method,
-                    "path": path,
-                    "status_code": status_code,
-                    "latency_ms": latency_ms,
-                    "ip": ip,
-                    "meta": f'{{"user_agent": {repr(user_agent)}}}',
-                    "is_error": is_error,
+                    "id":           str(uuid.uuid4()),
+                    "request_id":   request_id,
+                    "user_id":      user_id,
+                    "org_id":       org_id,
+                    "method":       method,
+                    "path":         path,
+                    "status_code":  status_code,
+                    "latency_ms":   latency_ms,
+                    "ip":           ip,
+                    "meta":         meta_json,
+                    "is_error":     is_error,
                 },
             )
             await db.commit()
     except Exception as exc:
-        # Log write failures must never crash the app
         print(f"[request_logger] write error (non-fatal): {exc}")
 
 
 class RequestLoggerMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Generate and attach request ID early so it's available to error handler
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
@@ -88,12 +89,10 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
         status_code = response.status_code
         is_error = status_code >= 500
 
-        # Attach X-Request-ID to every response — clients can report this to support
         response.headers["X-Request-ID"] = request_id
 
         user_id, org_id = _extract_user_org(request)
 
-        # Write log in background — response is already returned to client
         asyncio.create_task(
             _write_log(
                 request_id=request_id,

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Judges of Hades</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .admin-tabs-content > div { display: none; }
+    .admin-tabs-content > div.active { display: block; }
+    .config-form {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.5rem; margin-top: 1.5rem;
+    }
+    .config-form .grid-2 { gap: 1rem; }
+    .active-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); display: inline-block; margin-right: 4px;
+    }
+    .inactive-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-3); display: inline-block; margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav" id="nav"></div>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Admin</div>
+        <div class="page-subtitle">Manage users, organisations, and agent configurations.</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('users', this)">Users</button>
+      <button class="tab" onclick="switchTab('orgs', this)">Organisations</button>
+      <button class="tab" onclick="switchTab('configs', this)">Agent Configs</button>
+      <button class="tab" onclick="switchTab('platform', this)">Platform</button>
+    </div>
+
+    <div class="admin-tabs-content">
+
+      <!-- Users -->
+      <div id="tab-users" class="active">
+        <div id="alert-users"></div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Name</th><th>Email</th><th>Role</th><th>Power User</th><th>Org</th><th>Joined</th><th></th>
+              </tr></thead>
+              <tbody id="users-tbody">
+                <tr><td colspan="7"><div class="loading-row"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orgs -->
+      <div id="tab-orgs">
+        <div id="alert-orgs"></div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Name</th><th>Slug</th><th>Plan</th><th>Created</th><th></th>
+              </tr></thead>
+              <tbody id="orgs-tbody">
+                <tr><td colspan="5"><div class="loading-row"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Configs -->
+      <div id="tab-configs">
+        <div id="alert-configs"></div>
+        <div class="flex-between mb-2">
+          <span class="text-sm text-muted">Active configs are used by the next run. Only one config per agent can be active.</span>
+          <button class="btn btn-primary btn-sm" onclick="toggleConfigForm()">+ New Config</button>
+        </div>
+
+        <div class="config-form" id="config-form" style="display:none">
+          <div class="card-title mb-2">New Agent Configuration</div>
+          <div class="grid-2">
+            <div class="field">
+              <label class="label">Agent</label>
+              <select class="select" id="cfg-agent">
+                <option value="sales">Sales</option>
+                <option value="operations">Operations</option>
+                <option value="finance">Finance</option>
+                <option value="hades">Hades</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label">Model</label>
+              <input class="input" id="cfg-model" value="mistral" placeholder="e.g. mistral, llama3">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label class="label">Temperature</label>
+              <input class="input" id="cfg-temp" type="number" value="0.7" step="0.1" min="0" max="2">
+            </div>
+            <div class="field">
+              <label class="label">Max Tokens</label>
+              <input class="input" id="cfg-tokens" type="number" value="500" min="50" max="4000">
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">System Prompt</label>
+            <textarea class="textarea" id="cfg-prompt" rows="5"
+              placeholder="Describe this agent's role, expertise, and instruction style…"></textarea>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" id="cfg-save-btn" onclick="saveConfig()">Save Config</button>
+            <button class="btn btn-ghost" onclick="toggleConfigForm()">Cancel</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;margin-top:1rem">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Agent</th><th>Model</th><th>Version</th><th>Temp</th><th>Max Tokens</th><th>Status</th><th>Created</th><th></th>
+              </tr></thead>
+              <tbody id="configs-tbody">
+                <tr><td colspan="8"><div class="loading-row"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Platform -->
+      <div id="tab-platform">
+        <div id="platform-stats" class="grid-3">
+          <div class="loading-row" style="grid-column:1/-1"><div class="spinner"></div></div>
+        </div>
+        <div style="margin-top:1.5rem">
+          <div class="flex-between mb-2">
+            <span class="text-sm text-muted">Recent usage events</span>
+            <select class="select" id="event-filter" style="width:auto;height:28px;font-size:0.75rem"
+                    onchange="loadUsageEvents()">
+              <option value="">All events</option>
+              <option value="run_triggered">run_triggered</option>
+              <option value="feedback_submitted">feedback_submitted</option>
+            </select>
+          </div>
+          <div class="card" style="padding:0">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Event</th><th>User</th><th>Run</th><th>Time</th></tr></thead>
+                <tbody id="events-tbody">
+                  <tr><td colspan="4"><div class="loading-row"><div class="spinner"></div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /admin-tabs-content -->
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    if (!Auth.requireLogin()) throw '';
+    const user = Auth.user;
+    if (!user || (user.role !== 'admin' && !user.is_power_user)) {
+      window.location.href = '/static/index.html';
+    }
+    renderNav('admin');
+
+    function switchTab(key, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.admin-tabs-content > div').forEach(d => d.classList.remove('active'));
+      document.getElementById(`tab-${key}`).classList.add('active');
+      if (key === 'platform') { loadPlatform(); loadUsageEvents(); }
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    async function loadUsers() {
+      try {
+        const users = await api.get('/admin/users?page_size=100');
+        document.getElementById('users-tbody').innerHTML = users.map(u => `
+          <tr>
+            <td class="td-primary">${u.display_name}</td>
+            <td class="td-mono">${u.email}</td>
+            <td><span class="badge badge-${u.role === 'admin' ? 'failed' : 'running'}">${u.role}</span></td>
+            <td>${u.is_power_user ? '<span class="text-gold">✓</span>' : '<span class="text-dim">—</span>'}</td>
+            <td class="td-mono text-xs">${u.org_id ? u.org_id.slice(0,8) : '—'}</td>
+            <td class="text-dim text-xs">${timeAgo(u.created_at)}</td>
+            <td>
+              <select class="select" style="width:auto;height:28px;font-size:0.75rem"
+                      onchange="updateUserRole('${u.id}', this.value)">
+                <option ${u.role==='member'?'selected':''} value="member">member</option>
+                <option ${u.role==='power_user'?'selected':''} value="power_user">power_user</option>
+                <option ${u.role==='admin'?'selected':''} value="admin">admin</option>
+              </select>
+            </td>
+          </tr>`).join('');
+      } catch { document.getElementById('users-tbody').innerHTML = `<tr><td colspan="7"><div class="alert alert-error">Failed to load.</div></td></tr>`; }
+    }
+
+    async function updateUserRole(userId, role) {
+      try {
+        await api.patch(`/admin/users/${userId}`, { role });
+        showAlert('alert-users', 'User updated.', 'success');
+        setTimeout(() => clearAlert('alert-users'), 2000);
+      } catch (err) { showAlert('alert-users', err.detail || 'Update failed.'); }
+    }
+
+    // ── Orgs ──────────────────────────────────────────────────────────────────
+    async function loadOrgs() {
+      try {
+        const orgs = await api.get('/admin/orgs');
+        document.getElementById('orgs-tbody').innerHTML = orgs.map(o => `
+          <tr>
+            <td class="td-primary">${o.name}</td>
+            <td class="td-mono">${o.slug}</td>
+            <td>
+              <select class="select" style="width:auto;height:28px;font-size:0.75rem"
+                      onchange="updateOrgPlan('${o.id}', this.value)">
+                <option ${o.plan==='free'?'selected':''} value="free">free</option>
+                <option ${o.plan==='pro'?'selected':''} value="pro">pro</option>
+                <option ${o.plan==='enterprise'?'selected':''} value="enterprise">enterprise</option>
+              </select>
+            </td>
+            <td class="text-dim text-xs">${timeAgo(o.created_at)}</td>
+            <td></td>
+          </tr>`).join('');
+      } catch { document.getElementById('orgs-tbody').innerHTML = `<tr><td colspan="5">Failed to load.</td></tr>`; }
+    }
+
+    async function updateOrgPlan(orgId, plan) {
+      try {
+        await api.patch(`/admin/orgs/${orgId}`, { plan });
+        showAlert('alert-orgs', 'Plan updated.', 'success');
+        setTimeout(() => clearAlert('alert-orgs'), 2000);
+      } catch {}
+    }
+
+    // ── Agent configs ─────────────────────────────────────────────────────────
+    async function loadConfigs() {
+      try {
+        const configs = await api.get('/admin/agent-configs');
+        if (!configs.length) {
+          document.getElementById('configs-tbody').innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-sub">No configs yet. Create one above.</div></div></td></tr>`;
+          return;
+        }
+        document.getElementById('configs-tbody').innerHTML = configs.map(c => `
+          <tr>
+            <td class="td-primary" style="text-transform:capitalize">${c.agent_name}</td>
+            <td class="td-mono">${c.model}</td>
+            <td class="td-mono">v${c.version}</td>
+            <td class="td-mono">${c.temperature}</td>
+            <td class="td-mono">${c.max_tokens}</td>
+            <td>
+              ${c.is_active
+                ? '<span><span class="active-dot"></span><span class="text-xs">Active</span></span>'
+                : `<button class="btn btn-secondary btn-sm" onclick="activateConfig('${c.id}')">Activate</button>`}
+            </td>
+            <td class="text-dim text-xs">${timeAgo(c.created_at)}</td>
+            <td>
+              <button class="btn btn-ghost btn-sm" onclick="viewConfigRuns('${c.id}')">Runs</button>
+            </td>
+          </tr>`).join('');
+      } catch { document.getElementById('configs-tbody').innerHTML = `<tr><td colspan="8">Failed to load.</td></tr>`; }
+    }
+
+    function toggleConfigForm() {
+      const f = document.getElementById('config-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function saveConfig() {
+      clearAlert('alert-configs');
+      setLoading('cfg-save-btn', true, 'Save Config');
+      try {
+        await api.post('/admin/agent-configs', {
+          agent_name:    document.getElementById('cfg-agent').value,
+          model:         document.getElementById('cfg-model').value,
+          system_prompt: document.getElementById('cfg-prompt').value,
+          temperature:   parseFloat(document.getElementById('cfg-temp').value),
+          max_tokens:    parseInt(document.getElementById('cfg-tokens').value),
+        });
+        showAlert('alert-configs', 'Config saved. Activate it to use on the next run.', 'success');
+        toggleConfigForm();
+        loadConfigs();
+      } catch (err) { showAlert('alert-configs', err.detail || 'Failed to save.'); }
+      setLoading('cfg-save-btn', false, 'Save Config');
+    }
+
+    async function activateConfig(id) {
+      try {
+        await api.patch(`/admin/agent-configs/${id}/activate`);
+        showAlert('alert-configs', 'Config activated. Next run will use this version.', 'success');
+        setTimeout(() => clearAlert('alert-configs'), 3000);
+        loadConfigs();
+      } catch (err) { showAlert('alert-configs', err.detail || 'Failed to activate.'); }
+    }
+
+    async function viewConfigRuns(id) {
+      try {
+        const runs = await api.get(`/admin/agent-configs/${id}/runs`);
+        alert(`${runs.length} run(s) used this config version.`);
+      } catch {}
+    }
+
+    // ── Platform ──────────────────────────────────────────────────────────────
+    async function loadPlatform() {
+      try {
+        const d = await api.get('/admin/analytics/platform');
+        document.getElementById('platform-stats').innerHTML = `
+          <div class="stat stat-gold"><div class="stat-label">Total Runs</div><div class="stat-value">${d.total_runs}</div></div>
+          <div class="stat"><div class="stat-label">Total Users</div><div class="stat-value">${d.total_users}</div></div>
+          <div class="stat"><div class="stat-label">Organisations</div><div class="stat-value">${d.total_orgs}</div></div>
+        `;
+      } catch {}
+    }
+
+    async function loadUsageEvents() {
+      const type = document.getElementById('event-filter')?.value || '';
+      try {
+        const events = await api.get(`/admin/analytics/usage-events?page_size=50${type ? `&event_type=${type}` : ''}`);
+        document.getElementById('events-tbody').innerHTML = events.length ? events.map(e => `
+          <tr>
+            <td><span class="badge badge-running">${e.event_type}</span></td>
+            <td class="td-mono text-xs">${e.user_id ? e.user_id.slice(0,8) : '—'}</td>
+            <td class="td-mono text-xs">${e.run_id ? e.run_id.slice(0,8) : '—'}</td>
+            <td class="text-dim text-xs">${timeAgo(e.created_at)}</td>
+          </tr>`).join('')
+          : `<tr><td colspan="4"><div class="text-dim text-sm" style="padding:1rem">No events found.</div></td></tr>`;
+      } catch {}
+    }
+
+    loadUsers();
+    loadOrgs();
+    loadConfigs();
+  </script>
+</body>
+</html>

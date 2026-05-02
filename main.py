@@ -14,6 +14,9 @@ from api.routers.all_routers import (
     feedback_router, comments_router, shares_router,
     analytics_router, admin_router,
 )
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.join(BASE_DIR, "Hades-Production", "static")
 
 
 @asynccontextmanager
@@ -59,6 +62,6 @@ app.include_router(admin_router)
 
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

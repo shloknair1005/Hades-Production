@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Judges of Hades</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .auth-wrap { width: 100%; max-width: 420px; padding: 2rem; }
+    .auth-brand {
+      text-align: center; margin-bottom: 2.5rem;
+    }
+    .auth-glyph {
+      font-size: 3rem; display: block; margin-bottom: 0.75rem;
+      filter: drop-shadow(0 0 12px rgba(201,168,76,0.4));
+    }
+    .auth-title {
+      font-family: var(--font-serif);
+      font-size: 1.6rem; font-weight: 600;
+      color: var(--text); letter-spacing: -0.01em;
+    }
+    .auth-sub { font-size: 0.82rem; color: var(--text-3); margin-top: 4px; }
+    .auth-card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+    }
+    .auth-tabs { display: flex; margin-bottom: 1.75rem; border-bottom: 1px solid var(--border); }
+    .auth-tab {
+      flex: 1; text-align: center;
+      padding: 0.6rem;
+      font-size: 0.875rem; font-weight: 500;
+      color: var(--text-2);
+      cursor: pointer;
+      border: none; background: none;
+      border-bottom: 2px solid transparent;
+      transition: color var(--transition), border-color var(--transition);
+    }
+    .auth-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .auth-form { display: none; }
+    .auth-form.active { display: block; }
+    .theme-corner {
+      position: fixed; top: 1rem; right: 1rem;
+    }
+    .divider-or {
+      display: flex; align-items: center; gap: 0.75rem;
+      margin: 1.25rem 0; color: var(--text-3); font-size: 0.78rem;
+    }
+    .divider-or::before, .divider-or::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle theme-corner" id="theme-toggle" onclick="Theme.toggle()"></button>
+
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <span class="auth-glyph">𓂀</span>
+      <div class="auth-title">Judges of Hades</div>
+      <div class="auth-sub">Decision Intelligence Platform</div>
+    </div>
+
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
+        <button class="auth-tab" onclick="switchTab('register')">Register</button>
+      </div>
+
+      <div id="auth-alert"></div>
+
+      <!-- Login form -->
+      <form class="auth-form active" id="login-form" onsubmit="doLogin(event)">
+        <div class="field">
+          <label class="label">Email</label>
+          <input class="input" type="email" id="login-email" placeholder="you@org.com" required>
+        </div>
+        <div class="field">
+          <label class="label">Password</label>
+          <input class="input" type="password" id="login-password" placeholder="••••••••" required>
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" id="login-btn" type="submit">
+          Sign In
+        </button>
+      </form>
+
+      <!-- Register form -->
+      <form class="auth-form" id="register-form" onsubmit="doRegister(event)">
+        <div class="grid-2">
+          <div class="field">
+            <label class="label">Display Name</label>
+            <input class="input" type="text" id="reg-name" placeholder="Your name" required>
+          </div>
+          <div class="field">
+            <label class="label">Email</label>
+            <input class="input" type="email" id="reg-email" placeholder="you@org.com" required>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label">Password</label>
+          <input class="input" type="password" id="reg-password" placeholder="Min 8 characters" required>
+        </div>
+        <div class="divider-or">Organisation</div>
+        <div class="grid-2">
+          <div class="field">
+            <label class="label">Org Name</label>
+            <input class="input" type="text" id="reg-org-name" placeholder="Acme Corp" required>
+          </div>
+          <div class="field">
+            <label class="label">Org Slug</label>
+            <input class="input" type="text" id="reg-org-slug" placeholder="acme-corp" required
+                   pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens only">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" id="register-btn" type="submit">
+          Create Account
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    Theme.init();
+
+    // Redirect if already logged in
+    if (Auth.isLoggedIn()) window.location.href = '/static/index.html';
+
+    function switchTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach((t, i) =>
+        t.classList.toggle('active', (i === 0) === (tab === 'login'))
+      );
+      document.getElementById('login-form').classList.toggle('active', tab === 'login');
+      document.getElementById('register-form').classList.toggle('active', tab === 'register');
+      clearAlert('auth-alert');
+    }
+
+    async function doLogin(e) {
+      e.preventDefault();
+      clearAlert('auth-alert');
+      setLoading('login-btn', true, 'Sign In');
+      try {
+        const data = await api.post('/auth/login', {
+          email:    document.getElementById('login-email').value,
+          password: document.getElementById('login-password').value,
+        });
+        Auth.save(data);
+        const user = await api.get('/auth/me');
+        Auth.saveUser(user);
+        window.location.href = '/static/index.html';
+      } catch (err) {
+        showAlert('auth-alert', err.detail || 'Login failed.', 'error');
+        setLoading('login-btn', false, 'Sign In');
+      }
+    }
+
+    async function doRegister(e) {
+      e.preventDefault();
+      clearAlert('auth-alert');
+      setLoading('register-btn', true, 'Create Account');
+      try {
+        const data = await api.post('/auth/register', {
+          email:        document.getElementById('reg-email').value,
+          password:     document.getElementById('reg-password').value,
+          display_name: document.getElementById('reg-name').value,
+          org_name:     document.getElementById('reg-org-name').value,
+          org_slug:     document.getElementById('reg-org-slug').value,
+        });
+        Auth.save(data);
+        const user = await api.get('/auth/me');
+        Auth.saveUser(user);
+        window.location.href = '/static/index.html';
+      } catch (err) {
+        showAlert('auth-alert', err.detail || 'Registration failed.', 'error');
+        setLoading('register-btn', false, 'Create Account');
+      }
+    }
+  </script>
+</body>
+</html>

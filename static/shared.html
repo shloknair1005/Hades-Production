@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shared Decision — Judges of Hades</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .shared-wrap { max-width: 780px; margin: 0 auto; padding: 2rem; }
+    .shared-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 2rem; padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .shared-brand {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-serif); font-size: 1rem;
+      color: var(--text-2);
+    }
+    .shared-brand .crown { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <div class="shared-wrap">
+    <div class="shared-header">
+      <div class="shared-brand">
+        <span class="crown">𓂀</span> Judges of Hades
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="theme-toggle" id="theme-toggle" onclick="Theme.toggle()"></button>
+        <a href="/static/login.html" class="btn btn-secondary btn-sm">Sign In</a>
+      </div>
+    </div>
+
+    <div id="content">
+      <div class="loading-row" style="padding:4rem 0">
+        <div class="spinner" style="width:28px;height:28px;border-width:3px"></div>
+        <span class="text-muted">Loading shared decision…</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    Theme.init();
+
+    const token = location.pathname.split('/shared/')[1] || new URLSearchParams(location.search).get('token');
+
+    async function loadShared() {
+      if (!token) {
+        document.getElementById('content').innerHTML = `<div class="alert alert-error">No share token provided.</div>`;
+        return;
+      }
+      try {
+        const run = await api.get(`/shared/${token}`);
+
+        let agentOutputs = [];
+        // Public viewers can't fetch agent outputs (auth required) — show only final decision
+        const agents = [
+          { key: 'sales',      label: 'Sales Strategist',     icon: 'S', cls: 'icon-sales'   },
+          { key: 'operations', label: 'Operations Strategist', icon: 'O', cls: 'icon-ops'     },
+          { key: 'finance',    label: 'Finance Strategist',    icon: 'F', cls: 'icon-finance' },
+        ];
+
+        document.getElementById('content').innerHTML = `
+          <div class="run-meta" style="margin-bottom:1.5rem">
+            <span><b>Run</b> v${run.version}</span>
+            <span><b>Status</b> ${statusBadge(run.status)}</span>
+            ${run.completed_at ? `<span><b>Completed</b> ${fmtDate(run.completed_at)}</span>` : ''}
+          </div>
+
+          <div style="background:var(--bg-3);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem">
+            <div class="text-xs text-dim mono mb-1" style="text-transform:uppercase;letter-spacing:.06em">Problem</div>
+            <div style="font-size:0.9rem;color:var(--text);line-height:1.6">${run.problem_text}</div>
+          </div>
+
+          ${run.status === 'done' ? `
+            <div class="decision-card">
+              <div class="decision-card-header">
+                <span class="decision-crown">𓂀</span>
+                <div>
+                  <div class="decision-label">Final Verdict — Hades</div>
+                </div>
+              </div>
+              <div class="decision-body">${run.final_decision}</div>
+            </div>
+
+            <div style="margin-top:1rem;padding:1rem;background:var(--bg-3);border-radius:var(--radius);font-size:0.8rem;color:var(--text-3);text-align:center">
+              The council's individual deliberations are visible to authenticated members.
+              <a href="/static/login.html">Sign in</a> to view all agent outputs.
+            </div>
+          ` : `
+            <div class="alert alert-info">This decision is still being deliberated.</div>
+          `}
+        `;
+      } catch (err) {
+        if (err.status === 410) {
+          document.getElementById('content').innerHTML = `
+            <div class="empty">
+              <div class="empty-icon">🔒</div>
+              <div class="empty-title">Link expired</div>
+              <div class="empty-sub">This share link is no longer valid.</div>
+            </div>`;
+        } else {
+          document.getElementById('content').innerHTML = `
+            <div class="empty">
+              <div class="empty-icon">⚠</div>
+              <div class="empty-title">Not found</div>
+              <div class="empty-sub">This share link does not exist or has been revoked.</div>
+            </div>`;
+        }
+      }
+    }
+
+    loadShared();
+  </script>
+</body>
+</html>

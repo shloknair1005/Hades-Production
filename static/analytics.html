@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics — Judges of Hades</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .trust-bar-wrap { margin-top: 0.5rem; }
+    .trust-bar-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px; font-size: 0.82rem;
+    }
+    .trust-bar-label { width: 90px; color: var(--text-2); font-family: var(--font-mono); }
+    .trust-bar-track {
+      flex: 1; height: 6px;
+      background: var(--bg-4); border-radius: 3px; overflow: hidden;
+    }
+    .trust-bar-fill {
+      height: 100%; border-radius: 3px;
+      background: var(--gold);
+      transition: width 0.6s cubic-bezier(.4,0,.2,1);
+    }
+    .trust-bar-pct { width: 40px; text-align: right; color: var(--text-3); font-family: var(--font-mono); font-size: 0.75rem; }
+    .section-title {
+      font-family: var(--font-serif); font-size: 1.1rem; font-weight: 600;
+      color: var(--text); margin-bottom: 1rem;
+      padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    }
+    .agent-card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.25rem;
+    }
+    .agent-card-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;
+    }
+    .agent-stat { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 6px; }
+    .agent-stat-label { color: var(--text-3); }
+    .agent-stat-val { color: var(--text-2); font-family: var(--font-mono); }
+  </style>
+</head>
+<body>
+  <div class="nav" id="nav"></div>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Analytics</div>
+        <div class="page-subtitle">Performance metrics and agent trust scores.</div>
+      </div>
+      <div class="tabs" style="margin-bottom:0;border:none">
+        <button class="tab active" onclick="switchSection('personal', this)">Personal</button>
+        <button class="tab" onclick="switchSection('org', this)">Organisation</button>
+      </div>
+    </div>
+
+    <!-- Personal analytics -->
+    <div id="section-personal">
+      <div id="personal-stats" class="grid-4 mb-3">
+        <div class="loading-row" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Org analytics -->
+    <div id="section-org" style="display:none">
+      <div id="org-stats" class="grid-4 mb-3">
+        <div class="loading-row" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+
+      <div class="grid-2" style="margin-top:1.5rem">
+        <div>
+          <div class="section-title">Agent Trust Scores</div>
+          <div id="trust-bars"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+        <div>
+          <div class="section-title">By Agent — Detail</div>
+          <div id="agent-cards" class="grid-2"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    if (!Auth.requireLogin()) throw '';
+    renderNav('analytics');
+
+    let orgLoaded = false;
+
+    function switchSection(key, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('section-personal').style.display = key === 'personal' ? '' : 'none';
+      document.getElementById('section-org').style.display = key === 'org' ? '' : 'none';
+      if (key === 'org' && !orgLoaded) { loadOrg(); orgLoaded = true; }
+    }
+
+    async function loadPersonal() {
+      try {
+        const d = await api.get('/analytics/me');
+        document.getElementById('personal-stats').innerHTML = `
+          <div class="stat stat-gold">
+            <div class="stat-label">Total Runs</div>
+            <div class="stat-value">${d.total_runs}</div>
+            <div class="stat-sub">all time</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">This Month</div>
+            <div class="stat-value">${d.runs_this_month}</div>
+            <div class="stat-sub">runs triggered</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Avg Rating Given</div>
+            <div class="stat-value">${d.avg_rating_given ? d.avg_rating_given.toFixed(1) + ' ★' : '—'}</div>
+            <div class="stat-sub">out of 5</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Most Trusted Agent</div>
+            <div class="stat-value" style="font-size:1.2rem;text-transform:capitalize">
+              ${d.most_trusted_agent || '—'}
+            </div>
+            <div class="stat-sub">by your feedback</div>
+          </div>
+        `;
+      } catch {
+        document.getElementById('personal-stats').innerHTML = `<div class="alert alert-error">Failed to load.</div>`;
+      }
+    }
+
+    async function loadOrg() {
+      try {
+        const [org, agents] = await Promise.all([
+          api.get('/analytics/org'),
+          api.get('/analytics/org/agents'),
+        ]);
+
+        document.getElementById('org-stats').innerHTML = `
+          <div class="stat stat-gold">
+            <div class="stat-label">Total Runs</div>
+            <div class="stat-value">${org.total_runs}</div>
+            <div class="stat-sub">across org</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Active Users</div>
+            <div class="stat-value">${org.active_users}</div>
+            <div class="stat-sub">ran at least once</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Avg Rating</div>
+            <div class="stat-value">${org.avg_rating ? org.avg_rating.toFixed(1) + ' ★' : '—'}</div>
+            <div class="stat-sub">org average</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Top Agent</div>
+            <div class="stat-value" style="font-size:1.2rem;text-transform:capitalize">
+              ${org.most_trusted_agent || '—'}
+            </div>
+            <div class="stat-sub">most trusted</div>
+          </div>
+        `;
+
+        if (!agents.length) {
+          document.getElementById('trust-bars').innerHTML = `<div class="text-dim text-sm">No trust data yet. Submit feedback on runs to populate.</div>`;
+          document.getElementById('agent-cards').innerHTML = '';
+          return;
+        }
+
+        // Group by agent, use latest period
+        const latest = {};
+        agents.forEach(a => {
+          if (!latest[a.agent_name] || a.period > latest[a.agent_name].period)
+            latest[a.agent_name] = a;
+        });
+
+        const agentList = Object.values(latest).sort((a,b) => (b.trust_rate||0) - (a.trust_rate||0));
+        const maxRate = Math.max(...agentList.map(a => a.trust_rate || 0), 0.01);
+
+        document.getElementById('trust-bars').innerHTML = `
+          <div class="trust-bar-wrap">
+            ${agentList.map(a => `
+              <div class="trust-bar-row">
+                <span class="trust-bar-label">${a.agent_name}</span>
+                <div class="trust-bar-track">
+                  <div class="trust-bar-fill" style="width:${((a.trust_rate||0)/maxRate*100).toFixed(1)}%"></div>
+                </div>
+                <span class="trust-bar-pct">${a.trust_rate ? (a.trust_rate*100).toFixed(0)+'%' : '—'}</span>
+              </div>`).join('')}
+          </div>
+        `;
+
+        const agentIcons = { sales: 'icon-sales', operations: 'icon-ops', finance: 'icon-finance', hades: 'icon-hades' };
+        const agentInitials = { sales: 'S', operations: 'O', finance: 'F', hades: 'H' };
+
+        document.getElementById('agent-cards').innerHTML = agentList.map(a => `
+          <div class="agent-card">
+            <div class="agent-card-head">
+              <span class="accordion-agent-icon ${agentIcons[a.agent_name] || 'icon-sales'}">
+                ${agentInitials[a.agent_name] || a.agent_name[0].toUpperCase()}
+              </span>
+              <span style="font-weight:500;text-transform:capitalize">${a.agent_name}</span>
+            </div>
+            <div class="agent-stat"><span class="agent-stat-label">Times chosen</span><span class="agent-stat-val">${a.times_chosen}</span></div>
+            <div class="agent-stat"><span class="agent-stat-label">Total runs</span><span class="agent-stat-val">${a.total_runs}</span></div>
+            <div class="agent-stat"><span class="agent-stat-label">Trust rate</span><span class="agent-stat-val">${a.trust_rate ? (a.trust_rate*100).toFixed(1)+'%' : '—'}</span></div>
+            <div class="agent-stat"><span class="agent-stat-label">Avg rating</span><span class="agent-stat-val">${a.avg_rating ? a.avg_rating.toFixed(1)+' ★' : '—'}</span></div>
+          </div>`).join('');
+
+      } catch {
+        document.getElementById('org-stats').innerHTML = `<div class="alert alert-error">Failed to load org analytics.</div>`;
+      }
+    }
+
+    loadPersonal();
+  </script>
+</body>
+</html>
