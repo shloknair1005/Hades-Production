@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Judges of Hades</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // Simple icon components
+        const Gavel = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
+        );
+
+        const Send = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+        );
+
+        const Brain = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+        );
+
+        const Cog = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        );
+
+        const DollarSign = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const ThumbsUp = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+            </svg>
+        );
+
+        const AlertCircle = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const Loader2 = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        );
+
+        function HadesUI() {
+            const [problem, setProblem] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState('');
+            const [feedbackSent, setFeedbackSent] = useState(false);
+
+            const API_URL = '';  // Empty string uses same origin
+
+            const handleSubmit = async () => {
+                if (!problem.trim()) return;
+
+                setLoading(true);
+                setError('');
+                setResult(null);
+                setFeedbackSent(false);
+
+                try {
+                    const response = await fetch(`${API_URL}/decide`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ problem: problem.trim() })
+                    });
+
+                    if (!response.ok) throw new Error('Failed to get decision');
+
+                    const data = await response.json();
+                    setResult(data);
+                } catch (err) {
+                    setError(err.message || 'Something went wrong. Make sure your API is running.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleFeedback = async (agent) => {
+                if (!result?.decision_id) return;
+
+                try {
+                    await fetch(`${API_URL}/feedback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            decision_id: result.decision_id,
+                            chosen_agent: agent
+                        })
+                    });
+                    setFeedbackSent(true);
+                } catch (err) {
+                    console.error('Feedback error:', err);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-8">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="text-center mb-8">
+                            <div className="flex items-center justify-center gap-3 mb-2">
+                                <Gavel className="w-10 h-10 text-purple-400" />
+                                <h1 className="text-4xl md:text-5xl font-bold text-white">
+                                    Judges of Hades
+                                </h1>
+                            </div>
+                            <p className="text-gray-300 text-lg">
+                                Multi-Agent Decision Intelligence System
+                            </p>
+                        </div>
+
+                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 md:p-8 shadow-2xl border border-purple-500/20 mb-8">
+                            <label className="block text-gray-200 font-semibold mb-3 text-lg">
+                                Describe your business problem:
+                            </label>
+                            <textarea
+                                value={problem}
+                                onChange={(e) => setProblem(e.target.value)}
+                                placeholder="e.g., Should we expand to a new market with limited budget?"
+                                className="w-full h-32 bg-gray-700/50 text-white rounded-lg p-4 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50 outline-none resize-none"
+                                disabled={loading}
+                            />
+                            <button
+                                onClick={handleSubmit}
+                                disabled={loading || !problem.trim()}
+                                className="mt-4 w-full md:w-auto px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Consulting the Judges...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send className="w-5 h-5" />
+                                        Get Decision
+                                    </>
+                                )}
+                            </button>
+
+                            {error && (
+                                <div className="mt-4 bg-red-900/30 border border-red-500 rounded-lg p-4 flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-red-200 font-semibold">Error</p>
+                                        <p className="text-red-300 text-sm">{error}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {result && (
+                            <div className="space-y-6">
+                                <div className="grid md:grid-cols-3 gap-4">
+                                    <div className="bg-gradient-to-br from-blue-900/50 to-gray-800/50 rounded-xl p-5 border border-blue-500/30">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Brain className="w-6 h-6 text-blue-400" />
+                                            <h3 className="text-xl font-bold text-white">Sales</h3>
+                                        </div>
+                                        <p className="text-gray-300 text-sm leading-relaxed">
+                                            {result.agents?.sales || 'No recommendation'}
+                                        </p>
+                                        {!feedbackSent && (
+                                            <button
+                                                onClick={() => handleFeedback('sales')}
+                                                className="mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center gap-1"
+                                            >
+                                                <ThumbsUp className="w-4 h-4" />
+                                                Prefer this
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-gradient-to-br from-green-900/50 to-gray-800/50 rounded-xl p-5 border border-green-500/30">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Cog className="w-6 h-6 text-green-400" />
+                                            <h3 className="text-xl font-bold text-white">Operations</h3>
+                                        </div>
+                                        <p className="text-gray-300 text-sm leading-relaxed">
+                                            {result.agents?.operations || 'No recommendation'}
+                                        </p>
+                                        {!feedbackSent && (
+                                            <button
+                                                onClick={() => handleFeedback('operations')}
+                                                className="mt-4 text-green-400 hover:text-green-300 text-sm font-medium flex items-center gap-1"
+                                            >
+                                                <ThumbsUp className="w-4 h-4" />
+                                                Prefer this
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-gradient-to-br from-yellow-900/50 to-gray-800/50 rounded-xl p-5 border border-yellow-500/30">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <DollarSign className="w-6 h-6 text-yellow-400" />
+                                            <h3 className="text-xl font-bold text-white">Finance</h3>
+                                        </div>
+                                        <p className="text-gray-300 text-sm leading-relaxed">
+                                            {result.agents?.finance || 'No recommendation'}
+                                        </p>
+                                        {!feedbackSent && (
+                                            <button
+                                                onClick={() => handleFeedback('finance')}
+                                                className="mt-4 text-yellow-400 hover:text-yellow-300 text-sm font-medium flex items-center gap-1"
+                                            >
+                                                <ThumbsUp className="w-4 h-4" />
+                                                Prefer this
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-2xl p-6 md:p-8 border border-purple-500/30 shadow-2xl">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <Gavel className="w-8 h-8 text-purple-400" />
+                                        <h2 className="text-2xl md:text-3xl font-bold text-white">
+                                            Final Verdict
+                                        </h2>
+                                    </div>
+                                    <p className="text-gray-100 text-lg leading-relaxed">
+                                        {result.final_decision}
+                                    </p>
+                                    {!feedbackSent && (
+                                        <button
+                                            onClick={() => handleFeedback('hades')}
+                                            className="mt-6 text-purple-400 hover:text-purple-300 font-medium flex items-center gap-2"
+                                        >
+                                            <ThumbsUp className="w-5 h-5" />
+                                            Prefer this final decision
+                                        </button>
+                                    )}
+                                    {feedbackSent && (
+                                        <div className="mt-4 text-green-400 flex items-center gap-2">
+                                            <ThumbsUp className="w-5 h-5" />
+                                            <span>Thank you for your feedback!</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="text-center text-gray-400 text-sm">
+                                    Decision ID: {result.decision_id}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<HadesUI />, document.getElementById('root'));
+    </script>
+</body>
+</html>

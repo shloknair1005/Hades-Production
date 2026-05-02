@@ -1,0 +1,111 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+wheels/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env.bak
+.python-version
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+*.env
+
+# ── FastAPI / Uvicorn ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Database ──────────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+migrations/versions/
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+test-results/
+*.test.db
+
+# ── Type checking ─────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Frontend (for when it's built) ───────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+.next/
+.nuxt/
+.output/
+.cache/
+static/build/
+
+# ── Ollama / LLM ─────────────────────────────────────────────────────────────
+*.gguf
+*.ggml
+*.bin
+models/
+
+# ── Sentry ────────────────────────────────────────────────────────────────────
+.sentryclirc
+
+# ── Secrets / keys ────────────────────────────────────────────────────────────
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
