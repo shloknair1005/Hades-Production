@@ -35,13 +35,51 @@
     </div>
 
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('users', this)">Users</button>
+      <button class="tab active" onclick="switchTab('members', this)">👥 Members</button>
+      <button class="tab" onclick="switchTab('users', this)">Users</button>
       <button class="tab" onclick="switchTab('orgs', this)">Organisations</button>
       <button class="tab" onclick="switchTab('configs', this)">Agent Configs</button>
       <button class="tab" onclick="switchTab('platform', this)">Platform</button>
     </div>
 
     <div class="admin-tabs-content">
+
+      <!-- Members (org admin view) -->
+      <div id="tab-members" class="active">
+        <div id="alert-members"></div>
+        <div class="flex-between mb-2">
+          <span class="text-sm text-muted">Members of your organisation — usage metrics and management.</span>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Name</th><th>Email</th><th>Role</th><th>Total Runs</th><th>Last Active</th><th>Status</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="members-tbody">
+                <tr><td colspan="7"><div class="loading-row"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Admin handoff -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <div class="card-title">Transfer Admin Role</div>
+          </div>
+          <p class="text-sm text-muted mb-2">Hand off your admin role to another member. You will be demoted to member. This cannot be undone without super admin intervention.</p>
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <div class="field" style="flex:1;margin:0">
+              <label class="label">Target Member</label>
+              <select class="select" id="handoff-target">
+                <option value="">Select a member…</option>
+              </select>
+            </div>
+            <button class="btn btn-danger" id="handoff-btn" onclick="doHandoff()">Transfer Admin</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Users -->
       <div id="tab-users" class="active">
@@ -183,6 +221,7 @@
       document.querySelectorAll('.admin-tabs-content > div').forEach(d => d.classList.remove('active'));
       document.getElementById(`tab-${key}`).classList.add('active');
       if (key === 'platform') { loadPlatform(); loadUsageEvents(); }
+      if (key === 'members') loadMembers();
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
@@ -329,7 +368,7 @@
     async function loadUsageEvents() {
       const type = document.getElementById('event-filter')?.value || '';
       try {
-        const events = await api.get(`/admin/analytics/usage-events?page_size=50${type ? `&event_type=${type}` : ''}`);
+        const events = await api.get(`/org-admin/usage-events?page_size=50${type ? `&event_type=${type}` : ''}`);
         document.getElementById('events-tbody').innerHTML = events.length ? events.map(e => `
           <tr>
             <td><span class="badge badge-running">${e.event_type}</span></td>
@@ -341,6 +380,127 @@
       } catch {}
     }
 
+    // ── Members (org admin) ───────────────────────────────────────────────────
+    let membersData = [];
+
+    async function loadMembers() {
+      try {
+        membersData = await api.get('/org-admin/members');
+        renderMembers(membersData);
+
+        // Populate handoff dropdown (exclude self and banned)
+        const sel = document.getElementById('handoff-target');
+        sel.innerHTML = '<option value="">Select a member…</option>';
+        membersData
+          .filter(m => m.user_id !== user.id && !m.is_banned && m.role !== 'admin')
+          .forEach(m => {
+            const o = document.createElement('option');
+            o.value = m.user_id;
+            o.textContent = `${m.display_name} (${m.role})`;
+            sel.appendChild(o);
+          });
+      } catch (err) {
+        showAlert('alert-members', err.detail || 'Failed to load members.', 'error');
+      }
+    }
+
+    function renderMembers(members) {
+      document.getElementById('members-tbody').innerHTML = members.map(m => `
+        <tr>
+          <td class="td-primary">${m.display_name}</td>
+          <td class="td-mono text-xs">${m.email}</td>
+          <td>
+            ${m.role === 'admin'
+              ? '<span class="badge badge-running">admin</span>'
+              : `<select class="select" style="width:auto;height:28px;font-size:0.75rem"
+                         onchange="changeMemberRole('${m.user_id}', this.value)">
+                   <option ${m.role==='member'?'selected':''} value="member">member</option>
+                   <option ${m.role==='power_user'?'selected':''} value="power_user">power_user</option>
+                 </select>`}
+          </td>
+          <td class="td-mono">${m.total_runs}</td>
+          <td class="text-dim text-xs">${m.last_active ? timeAgo(m.last_active) : '—'}</td>
+          <td>
+            ${m.is_banned
+              ? '<span class="badge badge-failed">banned</span>'
+              : '<span class="badge badge-done">active</span>'}
+          </td>
+          <td>
+            <div style="display:flex;gap:4px">
+              ${m.user_id === user.id ? '<span class="text-xs text-dim">You</span>' :
+                m.is_banned
+                  ? `<button class="btn btn-secondary btn-sm" onclick="unbanMember('${m.user_id}', this)">Unban</button>`
+                  : `<button class="btn btn-danger btn-sm" onclick="banMember('${m.user_id}', this)">Ban</button>`}
+              ${!m.is_banned && m.user_id !== user.id
+                ? `<button class="btn btn-ghost btn-sm" onclick="deleteMemberData('${m.user_id}', this)">Delete data</button>`
+                : ''}
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function changeMemberRole(userId, role) {
+      try {
+        await api.patch(`/org-admin/members/${userId}/role`, { role });
+        showAlert('alert-members', 'Role updated.', 'success');
+        setTimeout(() => clearAlert('alert-members'), 2000);
+      } catch (err) { showAlert('alert-members', err.detail || 'Failed to update role.', 'error'); }
+    }
+
+    async function banMember(userId, btn) {
+      const reason = prompt('Reason for ban (optional):');
+      if (reason === null) return;
+      btn.disabled = true;
+      try {
+        await api.post(`/org-admin/members/${userId}/ban`, { reason: reason || null });
+        showAlert('alert-members', 'User banned.', 'success');
+        loadMembers();
+      } catch (err) {
+        showAlert('alert-members', err.detail || 'Ban failed.', 'error');
+        btn.disabled = false;
+      }
+    }
+
+    async function unbanMember(userId, btn) {
+      btn.disabled = true;
+      try {
+        await api.del(`/org-admin/members/${userId}/ban`);
+        showAlert('alert-members', 'User unbanned.', 'success');
+        loadMembers();
+      } catch { btn.disabled = false; }
+    }
+
+    async function deleteMemberData(userId, btn) {
+      if (!confirm('Delete all problems and runs for this user? This cannot be undone.')) return;
+      btn.disabled = true;
+      try {
+        await api.del(`/org-admin/members/${userId}`);
+        showAlert('alert-members', 'User data deleted.', 'success');
+        loadMembers();
+      } catch (err) {
+        showAlert('alert-members', err.detail || 'Delete failed.', 'error');
+        btn.disabled = false;
+      }
+    }
+
+    async function doHandoff() {
+      const targetId = document.getElementById('handoff-target').value;
+      if (!targetId) { showAlert('alert-members', 'Select a member to hand off to.', 'error'); return; }
+      if (!confirm('Transfer admin role? You will be demoted to member immediately.')) return;
+      const btn = document.getElementById('handoff-btn');
+      btn.disabled = true;
+      try {
+        await api.post('/org-admin/handoff', { target_user_id: targetId });
+        showAlert('alert-members', 'Admin role transferred. Reloading…', 'success');
+        Auth.clear();
+        setTimeout(() => window.location.href = '/static/login.html', 1500);
+      } catch (err) {
+        showAlert('alert-members', err.detail || 'Handoff failed.', 'error');
+        btn.disabled = false;
+      }
+    }
+
+    loadMembers();
     loadUsers();
     loadOrgs();
     loadConfigs();

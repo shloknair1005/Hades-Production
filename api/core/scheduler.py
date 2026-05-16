@@ -106,28 +106,45 @@ async def aggregate_trust_scores() -> None:
     print("[scheduler] analytics cache invalidated after trust score aggregation")
 
 
+async def purge_monitoring_flags() -> None:
+    """Delete resolved monitoring_flags older than 90 days. Unresolved flags are never auto-purged."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            text("""
+                DELETE FROM monitoring_flags
+                WHERE resolved = TRUE
+                  AND created_at < NOW() - INTERVAL '90 days'
+            """)
+        )
+        await db.commit()
+        print(f"[scheduler] purge_monitoring_flags: deleted {result.rowcount} rows")
+
+
 # ── Scheduler setup ───────────────────────────────────────────────────────────
 
 def register_jobs() -> None:
-    """Register all four jobs. Called once from main.py lifespan."""
+    """Register all jobs. Called once from main.py lifespan."""
 
-    # Purge standard logs — daily at 02:00 UTC
-    scheduler.add_job(
-        purge_standard_logs,
+    scheduler.add_job(purge_standard_logs,
         trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
-        id="purge_standard_logs",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
+        id="purge_standard_logs", replace_existing=True, misfire_grace_time=3600)
 
-    # Purge error logs — daily at 02:05 UTC (offset to avoid lock contention)
-    scheduler.add_job(
-        purge_error_logs,
+    scheduler.add_job(purge_error_logs,
         trigger=CronTrigger(hour=2, minute=5, timezone="UTC"),
-        id="purge_error_logs",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
+        id="purge_error_logs", replace_existing=True, misfire_grace_time=3600)
+
+    scheduler.add_job(purge_rate_limit_windows,
+        trigger=IntervalTrigger(minutes=10),
+        id="purge_rate_limit_windows", replace_existing=True)
+
+    scheduler.add_job(aggregate_trust_scores,
+        trigger=CronTrigger(hour=1, minute=0, timezone="UTC"),
+        id="aggregate_trust_scores", replace_existing=True, misfire_grace_time=3600)
+
+    # Purge resolved monitoring flags older than 90 days
+    scheduler.add_job(purge_monitoring_flags,
+        trigger=CronTrigger(hour=2, minute=15, timezone="UTC"),
+        id="purge_monitoring_flags", replace_existing=True, misfire_grace_time=3600)
 
     # Purge stale rate limit windows — every 10 minutes
     scheduler.add_job(

@@ -21,25 +21,65 @@ def _hash_token(token: str) -> str:
 
 
 async def register(req: RegisterRequest, db: AsyncSession) -> dict:
+    # 1. Check if email is already registered
     existing = await db.execute(select(User).where(User.email == req.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
-    slug_taken = await db.execute(select(Organization).where(Organization.slug == req.org_slug))
-    if slug_taken.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Org slug already taken")
+    # 2. Fetch existing Org or Create a new one securely
+    org_by_slug_query = await db.execute(select(Organization).where(Organization.slug == req.org_slug))
+    org_by_slug = org_by_slug_query.scalar_one_or_none()
 
-    org = Organization(name=req.org_name, slug=req.org_slug)
-    db.add(org)
-    await db.flush()
+    # Use ilike for case-insensitive matching on the organization name
+    org_by_name_query = await db.execute(select(Organization).where(Organization.name.ilike(req.org_name)))
+    org_by_name = org_by_name_query.scalar_one_or_none()
 
+    if org_by_slug and org_by_name:
+        if org_by_slug.id != org_by_name.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Organization name and slug conflict with different existing organizations."
+            )
+        org = org_by_slug # Perfect match, joining existing org
+
+    elif org_by_slug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"The slug '{req.org_slug}' belongs to '{org_by_slug.name}'. Please correct the organization name."
+        )
+
+    elif org_by_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"The organization '{org_by_name.name}' uses the slug '{org_by_name.slug}'. Please correct the slug."
+        )
+
+    else:
+        # Neither exists, safe to create a brand new organization
+        org = Organization(name=req.org_name, slug=req.org_slug)
+        db.add(org)
+        await db.flush()
+
+    # 3. Enforce the "1 Admin Per Org" rule
+    if req.requested_role == "admin":
+        admin_check = await db.execute(
+            select(User).where(User.org_id == org.id, User.role == "admin")
+        )
+        if admin_check.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="This organization already has an administrator."
+            )
+
+    # 4. Create the User with the requested role
     user = User(
         email=req.email,
         display_name=req.display_name,
         password_hash=_hash_password(req.password),
         org_id=org.id,
-        role="admin",
-        is_power_user=True,
+        role=req.requested_role,
+        # Automatically flag them as a power user if they choose admin or power_user
+        is_power_user=(req.requested_role in ["admin", "power_user"]),
     )
     db.add(user)
     await db.flush()

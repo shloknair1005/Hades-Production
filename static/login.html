@@ -71,7 +71,6 @@
 
       <div id="auth-alert"></div>
 
-      <!-- Login form -->
       <form class="auth-form active" id="login-form" onsubmit="doLogin(event)">
         <div class="field">
           <label class="label">Email</label>
@@ -86,7 +85,6 @@
         </button>
       </form>
 
-      <!-- Register form -->
       <form class="auth-form" id="register-form" onsubmit="doRegister(event)">
         <div class="grid-2">
           <div class="field">
@@ -114,6 +112,16 @@
                    pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens only">
           </div>
         </div>
+
+        <div class="field" style="margin-bottom: 1.5rem;">
+          <label class="label">Requested Role</label>
+          <select class="input" id="reg-role" required style="width: 100%; background: var(--bg-2); color: var(--text);">
+            <option value="user" selected>Standard User</option>
+            <option value="power_user">Power User</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
+
         <button class="btn btn-primary btn-lg" style="width:100%" id="register-btn" type="submit">
           Create Account
         </button>
@@ -162,11 +170,12 @@
       setLoading('register-btn', true, 'Create Account');
       try {
         const data = await api.post('/auth/register', {
-          email:        document.getElementById('reg-email').value,
-          password:     document.getElementById('reg-password').value,
-          display_name: document.getElementById('reg-name').value,
-          org_name:     document.getElementById('reg-org-name').value,
-          org_slug:     document.getElementById('reg-org-slug').value,
+          email:          document.getElementById('reg-email').value,
+          password:       document.getElementById('reg-password').value,
+          display_name:   document.getElementById('reg-name').value,
+          org_name:       document.getElementById('reg-org-name').value,
+          org_slug:       document.getElementById('reg-org-slug').value,
+          requested_role: document.getElementById('reg-role').value, // ADDED ROLE PAYLOAD
         });
         Auth.save(data);
         const user = await api.get('/auth/me');

@@ -3,12 +3,12 @@ const API = '';  // same origin — FastAPI serves both
 
 /* ── Auth helpers ───────────────────────────────────────────────────────────── */
 const Auth = {
-  get token()   { return localStorage.getItem('access_token'); },
-  get refresh()  { return localStorage.getItem('refresh_token'); },
-  get user()     { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } },
+  get token() { return localStorage.getItem('access_token'); },
+  get refresh() { return localStorage.getItem('refresh_token'); },
+  get user() { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } },
 
   save(data) {
-    localStorage.setItem('access_token',  data.access_token);
+    localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
   },
   saveUser(u) { localStorage.setItem('user', JSON.stringify(u)); },
@@ -73,10 +73,10 @@ const api = {
     return res.json();
   },
 
-  get(path)         { return this.request('GET',    path); },
-  post(path, body)  { return this.request('POST',   path, body); },
-  patch(path, body) { return this.request('PATCH',  path, body); },
-  del(path)         { return this.request('DELETE', path); },
+  get(path) { return this.request('GET', path); },
+  post(path, body) { return this.request('POST', path, body); },
+  patch(path, body) { return this.request('PATCH', path, body); },
+  del(path) { return this.request('DELETE', path); },
 };
 
 /* ── Theme ──────────────────────────────────────────────────────────────────── */
@@ -89,20 +89,22 @@ const Theme = {
     if (btn) btn.textContent = t === 'dark' ? '☀' : '☾';
   },
   toggle() { this.apply(this.current === 'dark' ? 'light' : 'dark'); },
-  init()   { this.apply(this.current); },
+  init() { this.apply(this.current); },
 };
 
 /* ── Nav ────────────────────────────────────────────────────────────────────── */
 function renderNav(active) {
   const user = Auth.user;
-  const isAdmin = user?.role === 'admin' || user?.is_power_user;
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.is_power_user || isSuperAdmin;
 
   const links = [
-    { href: '/static/index.html',     label: '⚖ Council',   key: 'council'   },
+    { href: '/static/index.html', label: '⚖ Council', key: 'council' },
     { href: '/static/dashboard.html', label: '⌂ Dashboard', key: 'dashboard' },
     { href: '/static/analytics.html', label: '◈ Analytics', key: 'analytics' },
   ];
   if (isAdmin) links.push({ href: '/static/admin.html', label: '⚙ Admin', key: 'admin' });
+  if (isSuperAdmin) links.push({ href: '/static/superadmin.html', label: '𓂀 Monitor', key: 'superadmin' });
 
   document.getElementById('nav').innerHTML = `
     <a class="nav-brand" href="/static/index.html">
@@ -116,6 +118,7 @@ function renderNav(active) {
     </nav>
     <div class="nav-right">
       ${user ? `<span class="nav-user">${user.display_name}</span>` : ''}
+      ${isSuperAdmin ? `<span class="badge badge-failed" style="font-size:0.7rem">SUPER ADMIN</span>` : ''}
       <button class="theme-toggle" id="theme-toggle" onclick="Theme.toggle()" title="Toggle theme"></button>
       ${user ? `<button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button>` : ''}
     </div>
@@ -126,7 +129,7 @@ function renderNav(active) {
 async function logout() {
   try {
     await api.post('/auth/logout', { refresh_token: Auth.refresh });
-  } catch {}
+  } catch { }
   Auth.clear();
   window.location.href = '/static/login.html';
 }
@@ -135,9 +138,9 @@ async function logout() {
 function timeAgo(iso) {
   const d = new Date(iso);
   const s = Math.floor((Date.now() - d) / 1000);
-  if (s < 60)   return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s/60)}m ago`;
-  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return d.toLocaleDateString();
 }
 

@@ -6,22 +6,50 @@
   <title>Council — Judges of Hades</title>
   <link rel="stylesheet" href="/static/style.css">
   <style>
-    .council-layout { display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem; align-items: start; }
-    .submit-card { position: sticky; top: 72px; }
-    .problem-select-row {
-      display: flex; gap: 8px; align-items: flex-end; margin-bottom: 1rem;
+    /* ── Layout ───────────────────────────────────────────────────────── */
+    .council-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1.5rem;
+      align-items: start;
     }
-    .problem-select-row .select { flex: 1; }
-    .version-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 0.6rem 0.75rem;
-      background: var(--bg-3); border-radius: var(--radius);
-      margin-bottom: 1rem; font-size: 0.8rem;
+    @media (max-width: 960px) {
+      .council-layout { grid-template-columns: 1fr; }
+      .left-col { order: 2; }
+      .right-col { order: 1; }
     }
-    .version-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--gold); flex-shrink: 0;
+    .left-col { display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 72px; }
+
+    /* ── History panel ────────────────────────────────────────────────── */
+    .history-empty {
+      font-size: 0.78rem; color: var(--text-3);
+      padding: 0.75rem 1rem; font-style: italic;
     }
+    .history-problem { border-bottom: 1px solid var(--border); }
+    .history-problem:last-child { border-bottom: none; }
+    .history-prob-title {
+      font-size: 0.72rem; font-weight: 700; color: var(--text-3);
+      padding: 0.55rem 1rem 0.3rem;
+      font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .history-run-item {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 1rem 0.4rem 1.4rem;
+      cursor: pointer; transition: background var(--transition);
+      font-size: 0.8rem; color: var(--text-2);
+    }
+    .history-run-item:hover { background: var(--bg-3); }
+    .history-run-item.active { background: var(--gold-glow); color: var(--gold); }
+    .history-run-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--text-3); flex-shrink: 0;
+    }
+    .history-run-item.active .history-run-dot { background: var(--gold); }
+    .history-run-label { flex: 1; }
+    .history-run-time { font-size: 0.7rem; color: var(--text-3); font-family: var(--font-mono); }
+    .history-run-item.active .history-run-time { color: var(--gold); opacity: 0.7; }
+
+    /* ── Result ───────────────────────────────────────────────────────── */
     .result-area { min-height: 300px; }
     .polling-state {
       display: flex; flex-direction: column; align-items: center;
@@ -30,42 +58,172 @@
     .polling-state .spinner { width: 32px; height: 32px; border-width: 3px; }
     .polling-label { font-family: var(--font-serif); font-size: 1.1rem; color: var(--text-2); }
     .polling-sub { font-size: 0.8rem; color: var(--text-3); font-family: var(--font-mono); }
+    .run-meta {
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      padding: 0.75rem 1rem; background: var(--bg-3); border-radius: var(--radius);
+      margin-bottom: 1.25rem; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-3);
+    }
+    .run-meta span b { color: var(--text-2); }
+
+    /* ── Agent output formatting ──────────────────────────────────────── */
     .agent-grid { display: flex; flex-direction: column; gap: 8px; }
+    .agent-card-wrap { display: flex; flex-direction: column; }
+    .agent-output { font-size: 0.84rem; line-height: 1.65; color: var(--text-1); }
+    .agent-output p { margin: 0 0 0.5rem; }
+    .agent-output p:last-child { margin: 0; }
+    .ao-point {
+      display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.3rem 0;
+    }
+    .ao-num {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      color: var(--gold); background: var(--gold-glow); border: 1px solid var(--border-gold);
+      border-radius: 3px; padding: 1px 5px; flex-shrink: 0; margin-top: 2px; line-height: 1.5;
+    }
+    .ao-body { flex: 1; }
+    .ao-body strong { color: var(--text-1); font-weight: 600; }
+    .ao-rec {
+      margin-top: 0.8rem; padding: 0.65rem 0.9rem;
+      background: var(--gold-glow); border-left: 3px solid var(--gold);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: 0.83rem; color: var(--text-1); font-weight: 500;
+    }
+
+    /* ── Chat button ──────────────────────────────────────────────────── */
+    .chat-btn {
+      display: flex; align-items: center; gap: 7px;
+      width: 100%; padding: 7px 14px;
+      background: var(--bg-2); border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-3);
+      cursor: pointer; transition: all var(--transition);
+    }
+    .chat-btn:hover { background: var(--bg-3); border-color: var(--border-gold); color: var(--gold); }
+    .chat-btn-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0; opacity: 0.5;
+    }
+
+    /* ── Feedback row ─────────────────────────────────────────────────── */
     .feedback-row {
       display: flex; align-items: center; gap: 8px;
-      padding: 1rem 1.25rem;
-      background: var(--bg-2); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); margin-top: 1rem;
+      padding: 1rem 1.25rem; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: var(--radius-lg); margin-top: 1rem;
     }
     .feedback-label { font-size: 0.8rem; color: var(--text-2); margin-right: auto; }
     .star-btn {
-      background: none; border: none;
-      font-size: 1.1rem; cursor: pointer; opacity: 0.35;
-      transition: opacity var(--transition), transform var(--transition);
-      padding: 2px;
+      background: none; border: none; font-size: 1.1rem; cursor: pointer; opacity: 0.35;
+      transition: opacity var(--transition), transform var(--transition); padding: 2px;
     }
     .star-btn:hover, .star-btn.active { opacity: 1; transform: scale(1.2); }
     .agent-trust-btn {
       background: var(--bg-3); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 3px 10px;
-      font-size: 0.75rem; font-family: var(--font-mono);
-      color: var(--text-2); cursor: pointer;
-      transition: all var(--transition);
+      font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-2);
+      cursor: pointer; transition: all var(--transition);
     }
     .agent-trust-btn:hover { border-color: var(--border-gold); color: var(--gold); }
     .agent-trust-btn.chosen { background: var(--gold-glow); border-color: var(--border-gold); color: var(--gold); }
-    .run-meta {
-      display: flex; flex-wrap: wrap; gap: 1rem;
-      padding: 0.75rem 1rem;
-      background: var(--bg-3); border-radius: var(--radius);
-      margin-bottom: 1.25rem;
-      font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-3);
+
+    /* ── Chat modal ───────────────────────────────────────────────────── */
+    .chat-overlay {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(0,0,0,0.65); display: flex;
+      align-items: flex-end; justify-content: center;
     }
-    .run-meta span b { color: var(--text-2); }
-    @media (max-width: 900px) {
-      .council-layout { grid-template-columns: 1fr; }
-      .submit-card { position: static; }
+    .chat-panel {
+      width: 100%; max-width: 720px; height: 72vh;
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      display: flex; flex-direction: column; overflow: hidden;
     }
+    .chat-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .chat-header-info { display: flex; flex-direction: column; gap: 2px; }
+    .chat-agent-label { font-weight: 600; color: var(--text-1); font-size: 0.9rem; }
+    .chat-problem-label { font-size: 0.72rem; color: var(--text-3); font-family: var(--font-mono); }
+    .chat-close {
+      margin-left: auto; background: none; border: none;
+      font-size: 1.2rem; cursor: pointer; color: var(--text-3);
+      line-height: 1; padding: 2px 8px; border-radius: var(--radius);
+    }
+    .chat-close:hover { color: var(--text-1); background: var(--bg-3); }
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 1.25rem;
+      display: flex; flex-direction: column; gap: 0.75rem;
+    }
+    .chat-date-divider {
+      text-align: center; font-size: 0.67rem; color: var(--text-3);
+      font-family: var(--font-mono); padding: 0.2rem 0;
+    }
+    .chat-bubble {
+      max-width: 82%; padding: 0.65rem 1rem;
+      font-size: 0.85rem; line-height: 1.6;
+    }
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: var(--gold-glow); border: 1px solid var(--border-gold); color: var(--text-1);
+      border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+    }
+    .chat-bubble.assistant {
+      align-self: flex-start;
+      background: var(--bg-3); border: 1px solid var(--border); color: var(--text-1);
+      border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg);
+    }
+    .chat-bubble p { margin: 0 0 0.3rem; }
+    .chat-bubble p:last-of-type { margin-bottom: 0; }
+    .cb-point { display: flex; gap: 0.5rem; margin: 0.2rem 0; }
+    .cb-bullet { color: var(--gold); font-weight: 700; flex-shrink: 0; }
+    .bubble-meta { font-size: 0.67rem; color: var(--text-3); margin-top: 6px; text-align: right; }
+    .chat-typing-wrap {
+      align-self: flex-start; display: flex; align-items: center; gap: 8px;
+      font-size: 0.78rem; color: var(--text-3); font-style: italic;
+      padding: 0.6rem 0.9rem; background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg);
+    }
+    .typing-dots { display: flex; gap: 3px; }
+    .typing-dots span {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--text-3);
+      animation: tpulse 1.2s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes tpulse { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+    .chat-empty {
+      margin: auto; text-align: center; padding: 2rem 1rem;
+      font-size: 0.82rem; color: var(--text-3);
+    }
+    .chat-empty-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .chat-input-row {
+      display: flex; gap: 0.5rem; padding: 0.85rem 1.25rem;
+      border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .chat-input-row textarea {
+      flex: 1; resize: none; min-height: 44px; max-height: 120px;
+      font-family: var(--font-sans); font-size: 0.85rem;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text-1);
+      padding: 0.55rem 0.8rem; line-height: 1.5;
+    }
+    .chat-input-row textarea:focus { border-color: var(--border-gold); outline: none; }
+    .chat-send-btn {
+      align-self: flex-end; padding: 0.55rem 1.1rem;
+      background: var(--gold); color: #000; border: none;
+      border-radius: var(--radius); font-weight: 700; cursor: pointer;
+      font-size: 0.8rem; transition: opacity var(--transition);
+    }
+    .chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* Misc carry-overs */
+    .version-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0.6rem 0.75rem; background: var(--bg-3); border-radius: var(--radius);
+      margin-bottom: 1rem; font-size: 0.8rem;
+    }
+    .version-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+    .problem-select-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 1rem; }
+    .problem-select-row .select { flex: 1; }
   </style>
 </head>
 <body>
@@ -80,49 +238,56 @@
     </div>
 
     <div class="council-layout">
-      <!-- Left: submit panel -->
-      <div class="submit-card card">
-        <div class="card-header">
-          <div class="card-title">New Deliberation</div>
-        </div>
-
-        <div id="submit-alert"></div>
-
-        <div class="field">
-          <label class="label">Problem</label>
-          <select class="select" id="problem-select" onchange="onProblemChange()">
-            <option value="">— create new —</option>
-          </select>
-        </div>
-
-        <div id="new-problem-fields">
-          <div class="field">
-            <label class="label">Problem Title</label>
-            <input class="input" id="problem-title" placeholder="Short descriptive title">
+      <!-- Left: submit + history -->
+      <div class="left-col">
+        <div class="card submit-card">
+          <div class="card-header">
+            <div class="card-title">New Deliberation</div>
           </div>
+          <div id="submit-alert"></div>
           <div class="field">
-            <label class="label">Visibility</label>
-            <select class="select" id="problem-visibility">
-              <option value="private">Private</option>
-              <option value="org">Organisation</option>
-              <option value="public">Public</option>
+            <label class="label">Problem</label>
+            <select class="select" id="problem-select" onchange="onProblemChange()">
+              <option value="">— create new —</option>
             </select>
           </div>
+          <div id="new-problem-fields">
+            <div class="field">
+              <label class="label">Problem Title</label>
+              <input class="input" id="problem-title" placeholder="Short descriptive title">
+            </div>
+            <div class="field">
+              <label class="label">Visibility</label>
+              <select class="select" id="problem-visibility">
+                <option value="private">Private</option>
+                <option value="org">Organisation</option>
+                <option value="public">Public</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">Describe the Problem</label>
+            <textarea class="textarea" id="problem-text" rows="4"
+              placeholder="Describe the decision or problem you need the council to deliberate on…"></textarea>
+          </div>
+          <button class="btn btn-primary btn-lg" style="width:100%" id="submit-btn" onclick="submitProblem()">
+            Convene the Council
+          </button>
         </div>
 
-        <div class="field">
-          <label class="label">Describe the Problem</label>
-          <textarea class="textarea" id="problem-text" rows="5"
-            placeholder="Describe the decision or problem you need the council to deliberate on..."></textarea>
+        <!-- History panel -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">History</div>
+          </div>
+          <div id="history-list">
+            <div class="history-empty">No past deliberations yet.</div>
+          </div>
         </div>
-
-        <button class="btn btn-primary btn-lg" style="width:100%" id="submit-btn" onclick="submitProblem()">
-          Convene the Council
-        </button>
       </div>
 
-      <!-- Right: result panel -->
-      <div class="result-area" id="result-area">
+      <!-- Right: result -->
+      <div class="right-col result-area" id="result-area">
         <div class="empty">
           <div class="empty-icon">⚖</div>
           <div class="empty-title">Awaiting deliberation</div>
@@ -132,29 +297,182 @@
     </div>
   </div>
 
+  <!-- ── Chat modal ────────────────────────────────────────────────────────── -->
+  <div id="chat-overlay" class="chat-overlay" style="display:none" onclick="closeChatOnOverlay(event)">
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span id="chat-agent-icon" class="accordion-agent-icon"></span>
+        <div class="chat-header-info">
+          <span id="chat-agent-label" class="chat-agent-label"></span>
+          <span id="chat-problem-label" class="chat-problem-label"></span>
+        </div>
+        <button class="chat-close" onclick="closeChat()">✕</button>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" placeholder="Ask a follow-up question… (Enter to send)" rows="2" onkeydown="chatKeydown(event)"></textarea>
+        <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
   <script>
     if (!Auth.requireLogin()) throw '';
     renderNav('council');
 
-    let problems = [];
+    let problems   = [];
     let currentRun = null;
-    let pollTimer = null;
+    let pollTimer  = null;
     let feedbackState = { rating: 0, chosen: null };
 
-    async function init() {
+    /* ════════════════════════════════════════════════════════════
+       OUTPUT FORMATTING
+       Turns raw LLM numbered-list text into structured HTML.
+    ════════════════════════════════════════════════════════════ */
+    function formatAgentOutput(raw) {
+      if (!raw) return '';
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      let html = '';
+      let sawList = false;
+
+      for (const line of lines) {
+        const mNum = line.match(/^(\d+)\.\s+(.+)/);
+
+        if (mNum) {
+          sawList = true;
+          const [, num, body] = mNum;
+          html += `<div class="ao-point"><span class="ao-num">${num}</span><span class="ao-body">${boldLabel(body)}</span></div>`;
+        } else {
+          const isRec = sawList && /\b(recommend|conclusion|summary|overall|therefore|in conclusion|in summary)\b/i.test(line);
+          if (isRec) {
+            html += `<div class="ao-rec">${escHtml(line)}</div>`;
+          } else {
+            html += `<p>${escHtml(line)}</p>`;
+          }
+        }
+      }
+      return `<div class="agent-output">${html}</div>`;
+    }
+
+    /* Bold the label before the first colon when it's short enough to be a title. */
+    function boldLabel(text) {
+      const ci = text.indexOf(':');
+      if (ci > 0 && ci < 55) {
+        return `<strong>${escHtml(text.slice(0, ci))}:</strong> ${escHtml(text.slice(ci + 1).trim())}`;
+      }
+      return escHtml(text);
+    }
+
+    /* Lighter formatting for chat bubbles. */
+    function formatChatOutput(raw) {
+      if (!raw) return '';
+      let html = '';
+      for (const line of raw.split('\n').map(l => l.trim()).filter(Boolean)) {
+        const mNum = line.match(/^(\d+)\.\s+(.+)/);
+        const mBul = line.match(/^[-•*]\s+(.+)/);
+        if (mNum) {
+          html += `<div class="cb-point"><span class="cb-bullet">${mNum[1]}.</span><span>${boldLabel(mNum[2])}</span></div>`;
+        } else if (mBul) {
+          html += `<div class="cb-point"><span class="cb-bullet">·</span><span>${escHtml(mBul[1])}</span></div>`;
+        } else {
+          html += `<p>${escHtml(line)}</p>`;
+        }
+      }
+      return html;
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function escAttr(s) {
+      return String(s).replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       HISTORY
+    ════════════════════════════════════════════════════════════ */
+    let historyData = {};   // { [problemId]: { problem, runs[] } }
+    let activeRunId = null;
+
+    async function loadHistory() {
       try {
-        problems = await api.get('/problems?page_size=50');
+        const probs = await api.get('/problems?page_size=50');
+        problems = probs;
+
+        // Populate problem select
         const sel = document.getElementById('problem-select');
-        problems.forEach(p => {
+        while (sel.options.length > 1) sel.remove(1);
+        probs.forEach(p => {
           const o = document.createElement('option');
-          o.value = p.id;
-          o.textContent = p.title;
-          sel.appendChild(o);
+          o.value = p.id; o.textContent = p.title; sel.appendChild(o);
         });
+
+        // Fetch runs for each problem in parallel
+        await Promise.all(probs.map(async p => {
+          try {
+            const runs = await api.get(`/problems/${p.id}/runs?page_size=20`);
+            historyData[p.id] = { problem: p, runs: runs.filter(r => r.status === 'done') };
+          } catch {
+            historyData[p.id] = { problem: p, runs: [] };
+          }
+        }));
+        renderHistory();
       } catch {}
     }
 
+    function renderHistory() {
+      const container = document.getElementById('history-list');
+      const withRuns  = Object.values(historyData).filter(d => d.runs.length > 0);
+
+      if (!withRuns.length) {
+        container.innerHTML = '<div class="history-empty">No past deliberations yet.</div>';
+        return;
+      }
+
+      // Sort by most-recent run first
+      withRuns.sort((a, b) =>
+        (b.runs[0]?.completed_at || '').localeCompare(a.runs[0]?.completed_at || '')
+      );
+
+      container.innerHTML = withRuns.map(d => {
+        const runsHtml = d.runs.slice(0, 6).map(r => `
+          <div class="history-run-item ${r.id === activeRunId ? 'active' : ''}"
+               onclick="loadRun('${r.id}','${escAttr(d.problem.title)}')">
+            <span class="history-run-dot"></span>
+            <span class="history-run-label">v${r.version} · ${r.problem_text.slice(0, 32)}${r.problem_text.length > 32 ? '…' : ''}</span>
+            <span class="history-run-time">${fmtRelative(r.completed_at)}</span>
+          </div>`).join('');
+        return `
+          <div class="history-problem">
+            <div class="history-prob-title">${escHtml(d.problem.title)}</div>
+            ${runsHtml}
+          </div>`;
+      }).join('');
+    }
+
+    function fmtRelative(ts) {
+      if (!ts) return '';
+      const m = Math.floor((Date.now() - new Date(ts)) / 60000);
+      if (m < 1)  return 'now';
+      if (m < 60) return `${m}m`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h`;
+      return `${Math.floor(h / 24)}d`;
+    }
+
+    async function loadRun(runId, problemTitle) {
+      activeRunId = runId;
+      renderHistory();
+      try {
+        const run = await api.get(`/runs/${runId}`);
+        await showResult(run, problemTitle);
+      } catch {}
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SUBMIT
+    ════════════════════════════════════════════════════════════ */
     function onProblemChange() {
       const val = document.getElementById('problem-select').value;
       document.getElementById('new-problem-fields').style.display = val ? 'none' : 'block';
@@ -164,22 +482,21 @@
       clearAlert('submit-alert');
       const text = document.getElementById('problem-text').value.trim();
       if (!text) { showAlert('submit-alert', 'Please describe the problem.'); return; }
-
       setLoading('submit-btn', true, 'Convene the Council');
+
       try {
         let problemId = document.getElementById('problem-select').value;
-
         if (!problemId) {
           const title = document.getElementById('problem-title').value.trim() || text.slice(0, 60);
           const vis   = document.getElementById('problem-visibility').value;
           const prob  = await api.post('/problems', { title, visibility: vis });
           problemId   = prob.id;
+          historyData[prob.id] = { problem: prob, runs: [] };
         }
-
         const run = await api.post(`/problems/${problemId}/runs`, { problem_text: text });
         currentRun = run;
         showPolling(run);
-        pollForResult(run.id);
+        pollForResult(run.id, problemId);
       } catch (err) {
         showAlert('submit-alert', err.detail || 'Failed to submit.');
         setLoading('submit-btn', false, 'Convene the Council');
@@ -192,29 +509,39 @@
           <div class="spinner"></div>
           <div class="polling-label">The council is deliberating…</div>
           <div class="polling-sub mono">RUN · v${run.version} · ${run.id.slice(0,8).toUpperCase()}</div>
-        </div>
-      `;
+        </div>`;
       setLoading('submit-btn', false, 'Convene the Council');
     }
 
-    function pollForResult(runId) {
+    function pollForResult(runId, problemId) {
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(async () => {
         try {
           const run = await api.get(`/runs/${runId}`);
           if (run.status === 'done') {
             clearInterval(pollTimer);
-            await showResult(run);
+            if (problemId && historyData[problemId]) {
+              // Prepend to history if not already there
+              const existing = historyData[problemId].runs.find(r => r.id === run.id);
+              if (!existing) historyData[problemId].runs.unshift(run);
+            }
+            activeRunId = run.id;
+            renderHistory();
+            const title = historyData[problemId]?.problem?.title || '';
+            await showResult(run, title);
           } else if (run.status === 'failed') {
             clearInterval(pollTimer);
-            document.getElementById('result-area').innerHTML = `
-              <div class="alert alert-error">The council failed to reach a verdict. Please try again.</div>`;
+            document.getElementById('result-area').innerHTML =
+              `<div class="alert alert-error">The council failed to reach a verdict. Please try again.</div>`;
           }
         } catch {}
       }, 2500);
     }
 
-    async function showResult(run) {
+    /* ════════════════════════════════════════════════════════════
+       SHOW RESULT
+    ════════════════════════════════════════════════════════════ */
+    async function showResult(run, problemTitle) {
       let agentOutputs = [];
       try { agentOutputs = await api.get(`/runs/${run.id}/agents`); } catch {}
 
@@ -222,37 +549,49 @@
       agentOutputs.forEach(a => agentMap[a.agent_name] = a);
 
       const agents = [
-        { key: 'sales',      label: 'Sales Strategist',      icon: 'S', cls: 'icon-sales'   },
-        { key: 'operations', label: 'Operations Strategist',  icon: 'O', cls: 'icon-ops'     },
-        { key: 'finance',    label: 'Finance Strategist',     icon: 'F', cls: 'icon-finance' },
+        { key: 'sales',      label: 'Sales Strategist',     icon: 'S', cls: 'icon-sales'   },
+        { key: 'operations', label: 'Operations Strategist', icon: 'O', cls: 'icon-ops'     },
+        { key: 'finance',    label: 'Finance Strategist',    icon: 'F', cls: 'icon-finance' },
       ];
 
       const accordions = agents.map(a => {
         const out = agentMap[a.key];
         if (!out) return '';
         return `
-          <div class="accordion" onclick="accordion(this)">
-            <button class="accordion-trigger">
-              <span class="accordion-label">
-                <span class="accordion-agent-icon ${a.cls}">${a.icon}</span>
-                ${a.label}
-              </span>
-              <span class="accordion-chevron">▾</span>
-            </button>
-            <div class="accordion-body">
-              <div class="accordion-content">
-                ${out.raw_output}
-                <div class="accordion-meta">
-                  <span>⏱ ${out.latency_ms}ms</span>
-                  ${out.tokens_used ? `<span>◈ ${out.tokens_used} tokens</span>` : ''}
+          <div class="agent-card-wrap">
+            <div class="accordion" onclick="accordion(this)">
+              <button class="accordion-trigger">
+                <span class="accordion-label">
+                  <span class="accordion-agent-icon ${a.cls}">${a.icon}</span>
+                  ${a.label}
+                </span>
+                <span class="accordion-chevron">▾</span>
+              </button>
+              <div class="accordion-body">
+                <div class="accordion-content">
+                  ${formatAgentOutput(out.raw_output)}
+                  <div class="accordion-meta">
+                    <span>⏱ ${out.latency_ms}ms</span>
+                    ${out.tokens_used ? `<span>◈ ${out.tokens_used} tokens</span>` : ''}
+                  </div>
                 </div>
               </div>
             </div>
+            <button class="chat-btn"
+              onclick="openChat('${run.id}','${a.key}','${a.label}','${escAttr(run.problem_text)}')">
+              <span class="chat-btn-dot"></span>
+              Continue conversation with ${a.label}
+            </button>
           </div>`;
       }).join('');
 
+      const titleHtml = problemTitle
+        ? `<span style="color:var(--text-2);font-weight:600">${escHtml(problemTitle)}</span> · `
+        : '';
+
       document.getElementById('result-area').innerHTML = `
         <div class="run-meta">
+          ${titleHtml}
           <span><b>Run</b> v${run.version}</span>
           <span><b>ID</b> ${run.id.slice(0,8).toUpperCase()}</span>
           <span><b>Completed</b> ${fmtDate(run.completed_at)}</span>
@@ -261,11 +600,9 @@
         <div class="decision-card">
           <div class="decision-card-header">
             <span class="decision-crown">𓂀</span>
-            <div>
-              <div class="decision-label">Final Verdict — Hades</div>
-            </div>
+            <div><div class="decision-label">Final Verdict — Hades</div></div>
           </div>
-          <div class="decision-body">${run.final_decision}</div>
+          <div class="decision-body">${formatAgentOutput(run.final_decision)}</div>
         </div>
 
         <div class="agent-grid">${accordions}</div>
@@ -277,32 +614,27 @@
           <span style="width:1px;background:var(--border);height:20px;margin:0 4px"></span>
           <span style="font-size:0.75rem;color:var(--text-3);margin-right:4px">Most helpful:</span>
           ${agents.map(a => `
-            <button class="agent-trust-btn" onclick="setChosen('${a.key}', this)">${a.key}</button>`).join('')}
+            <button class="agent-trust-btn" onclick="setChosen('${a.key}',this)">${a.key}</button>`).join('')}
           <button class="btn btn-primary btn-sm" onclick="submitFeedback('${run.id}')">Save</button>
-        </div>
-      `;
+        </div>`;
 
       feedbackState = { rating: 0, chosen: null };
     }
 
     function setRating(n) {
       feedbackState.rating = n;
-      document.querySelectorAll('.star-btn').forEach(b => {
-        b.classList.toggle('active', parseInt(b.dataset.star) <= n);
-      });
+      document.querySelectorAll('.star-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.star) <= n));
     }
-
     function setChosen(agent, btn) {
       feedbackState.chosen = agent;
       document.querySelectorAll('.agent-trust-btn').forEach(b => b.classList.remove('chosen'));
       btn.classList.add('chosen');
     }
-
     async function submitFeedback(runId) {
       try {
         await api.post(`/runs/${runId}/feedback`, {
-          rating:       feedbackState.rating || null,
-          chosen_agent: feedbackState.chosen,
+          rating: feedbackState.rating || null, chosen_agent: feedbackState.chosen,
         });
         const row = document.getElementById('feedback-row');
         if (row) row.innerHTML = `<span class="text-gold" style="font-size:0.85rem">✓ Feedback recorded</span>`;
@@ -314,7 +646,136 @@
       }
     }
 
-    init();
+    loadHistory();
+
+    /* ════════════════════════════════════════════════════════════
+       CHAT
+    ════════════════════════════════════════════════════════════ */
+    const chatState = { runId: null, agentKey: null, agentLabel: null, problemText: null, sending: false };
+
+    const AGENT_ICONS = {
+      sales:      { icon: 'S',  cls: 'icon-sales'   },
+      operations: { icon: 'O',  cls: 'icon-ops'     },
+      finance:    { icon: 'F',  cls: 'icon-finance' },
+      hades:      { icon: '𓂀', cls: 'icon-hades'   },
+    };
+
+    async function openChat(runId, agentKey, agentLabel, problemText) {
+      Object.assign(chatState, { runId, agentKey, agentLabel, problemText });
+
+      const { icon, cls } = AGENT_ICONS[agentKey] || { icon: '?', cls: '' };
+      document.getElementById('chat-agent-icon').textContent = icon;
+      document.getElementById('chat-agent-icon').className   = `accordion-agent-icon ${cls}`;
+      document.getElementById('chat-agent-label').textContent = `1:1 with ${agentLabel}`;
+      document.getElementById('chat-problem-label').textContent =
+        problemText ? (problemText.length > 65 ? problemText.slice(0, 65) + '…' : problemText) : '';
+
+      const messages = document.getElementById('chat-messages');
+      messages.innerHTML = typingHTML('Loading history…');
+      document.getElementById('chat-overlay').style.display = 'flex';
+
+      try {
+        const history = await api.get(`/runs/${runId}/chat/${agentKey}`);
+        renderChatHistory(history);
+      } catch {
+        messages.innerHTML = emptyChat();
+      }
+      setTimeout(() => document.getElementById('chat-input').focus(), 50);
+    }
+
+    function closeChat() {
+      document.getElementById('chat-overlay').style.display = 'none';
+    }
+    function closeChatOnOverlay(e) {
+      if (e.target === document.getElementById('chat-overlay')) closeChat();
+    }
+
+    function emptyChat() {
+      return `<div class="chat-empty">
+        <div class="chat-empty-icon">⚖</div>
+        No messages yet — ask your first follow-up question.
+      </div>`;
+    }
+    function typingHTML(label) {
+      return `<div class="chat-typing-wrap">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        ${escHtml(label)}
+      </div>`;
+    }
+
+    function renderChatHistory(msgs) {
+      const c = document.getElementById('chat-messages');
+      if (!msgs.length) { c.innerHTML = emptyChat(); return; }
+      let html = '', lastDay = '';
+      for (const m of msgs) {
+        const day = m.created_at
+          ? new Date(m.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+          : '';
+        if (day && day !== lastDay) {
+          html += `<div class="chat-date-divider">— ${day} —</div>`;
+          lastDay = day;
+        }
+        html += bubbleHTML(m.role, m.content, m.created_at);
+      }
+      c.innerHTML = html;
+      c.scrollTop = c.scrollHeight;
+    }
+
+    function bubbleHTML(role, content, ts) {
+      const time = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      const body = role === 'assistant'
+        ? formatChatOutput(content)
+        : `<p>${escHtml(content)}</p>`;
+      return `<div class="chat-bubble ${role}">${body}<div class="bubble-meta">${time}</div></div>`;
+    }
+
+    function appendBubble(role, content, ts) {
+      const c = document.getElementById('chat-messages');
+      c.querySelectorAll('.chat-typing-wrap, .chat-empty').forEach(el => el.remove());
+      c.insertAdjacentHTML('beforeend', bubbleHTML(role, content, ts));
+      c.scrollTop = c.scrollHeight;
+    }
+
+    function chatKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+    }
+
+    async function sendChatMessage() {
+      if (chatState.sending) return;
+      const input = document.getElementById('chat-input');
+      const content = input.value.trim();
+      if (!content) return;
+
+      chatState.sending = true;
+      document.getElementById('chat-send-btn').disabled = true;
+      input.value = '';
+
+      appendBubble('user', content, new Date().toISOString());
+
+      const c = document.getElementById('chat-messages');
+      const typing = document.createElement('div');
+      typing.className = 'chat-typing-wrap';
+      typing.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div> ${escHtml(chatState.agentLabel)} is thinking…`;
+      c.appendChild(typing);
+      c.scrollTop = c.scrollHeight;
+
+      try {
+        const reply = await api.post(`/runs/${chatState.runId}/chat/${chatState.agentKey}`, { content });
+        typing.remove();
+        appendBubble('assistant', reply.content, reply.created_at);
+      } catch {
+        typing.remove();
+        const err = document.createElement('div');
+        err.className = 'chat-typing-wrap';
+        err.textContent = 'Failed to get a response. Please try again.';
+        c.appendChild(err);
+        c.scrollTop = c.scrollHeight;
+      } finally {
+        chatState.sending = false;
+        document.getElementById('chat-send-btn').disabled = false;
+        input.focus();
+      }
+    }
   </script>
 </body>
 </html>

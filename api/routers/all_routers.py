@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from api.core.database import get_db
@@ -13,6 +13,7 @@ from api.middleware.cache import (
 )
 from api.models import orm, schemas
 from api.services import auth_service, run_service
+from api.services.chat_service import get_chat_history, send_chat_message
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -123,10 +124,12 @@ runs_router = APIRouter(tags=["runs"])
 async def trigger_run(
     problem_id: str,
     req: schemas.RunCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: orm.User = Depends(get_current_user),
 ):
-    return await run_service.create_run(problem_id, req, current_user.id, current_user.org_id, db)
+    request_id = getattr(request.state, "request_id", None)
+    return await run_service.create_run(problem_id, req, current_user.id, current_user.org_id, db, request_id=request_id)
 
 @problems_router.get("/{problem_id}/runs", response_model=list[schemas.RunOut])
 async def list_runs(
@@ -620,3 +623,36 @@ async def admin_usage_events(
     q = q.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(q)
     return result.scalars().all()
+
+# ── Agent 1:1 Chat ────────────────────────────────────────────────────────────
+
+chat_router = APIRouter(tags=["chat"])
+
+@chat_router.get("/runs/{run_id}/chat/{agent_name}", response_model=list[schemas.ChatMessageOut])
+async def get_agent_chat_history(
+    run_id: str,
+    agent_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: orm.User = Depends(get_current_user),
+):
+    """Retrieve all chat messages for a specific agent in a run (for this user)."""
+    return await get_chat_history(run_id, agent_name, current_user.id, db)
+
+
+@chat_router.post("/runs/{run_id}/chat/{agent_name}", response_model=schemas.ChatMessageOut, status_code=201)
+async def post_agent_chat_message(
+    run_id: str,
+    agent_name: str,
+    req: schemas.ChatMessageCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: orm.User = Depends(get_current_user),
+):
+    """Send a follow-up message to a specific agent and receive its reply."""
+    return await send_chat_message(
+        run_id=run_id,
+        agent_name=agent_name,
+        user_message=req.content,
+        user_id=current_user.id,
+        org_id=current_user.org_id,
+        db=db,
+    )
