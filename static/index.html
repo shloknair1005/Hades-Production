@@ -495,8 +495,9 @@
         }
         const run = await api.post(`/problems/${problemId}/runs`, { problem_text: text });
         currentRun = run;
+        // Hand polling off to RunWatcher — survives page navigation
+        RunWatcher.start(run, problemId, text);
         showPolling(run);
-        pollForResult(run.id, problemId);
       } catch (err) {
         showAlert('submit-alert', err.detail || 'Failed to submit.');
         setLoading('submit-btn', false, 'Convene the Council');
@@ -514,29 +515,29 @@
     }
 
     function pollForResult(runId, problemId) {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(async () => {
-        try {
-          const run = await api.get(`/runs/${runId}`);
-          if (run.status === 'done') {
-            clearInterval(pollTimer);
-            if (problemId && historyData[problemId]) {
-              // Prepend to history if not already there
-              const existing = historyData[problemId].runs.find(r => r.id === run.id);
-              if (!existing) historyData[problemId].runs.unshift(run);
-            }
-            activeRunId = run.id;
-            renderHistory();
-            const title = historyData[problemId]?.problem?.title || '';
-            await showResult(run, title);
-          } else if (run.status === 'failed') {
-            clearInterval(pollTimer);
-            document.getElementById('result-area').innerHTML =
-              `<div class="alert alert-error">The council failed to reach a verdict. Please try again.</div>`;
-          }
-        } catch {}
-      }, 2500);
+      // Legacy — not called directly anymore. RunWatcher handles polling.
+      // Kept for reference only.
     }
+
+    /* Register with RunWatcher so we get notified when status changes */
+    RunWatcher.onChange(async (run, problemId) => {
+      if (run.status === 'done') {
+        RunWatcher.clear();
+        if (problemId && historyData[problemId]) {
+          const existing = historyData[problemId].runs.find(r => r.id === run.id);
+          if (!existing) historyData[problemId].runs.unshift(run);
+        }
+        activeRunId = run.id;
+        renderHistory();
+        const title = historyData[problemId]?.problem?.title || '';
+        await showResult(run, title);
+      } else if (run.status === 'failed') {
+        RunWatcher.clear();
+        document.getElementById('result-area').innerHTML =
+          `<div class="alert alert-error">The council failed to reach a verdict. Please try again.</div>`;
+      }
+      // pending/running — showPolling already rendered, nothing to update
+    });
 
     /* ════════════════════════════════════════════════════════════
        SHOW RESULT
@@ -647,6 +648,46 @@
     }
 
     loadHistory();
+
+    /* Resume any active run that was deliberating while user was on another page */
+    (async () => {
+      const saved = RunWatcher.resume();
+      if (!saved) return;
+
+      // Restore the problem text field
+      const textArea = document.getElementById('problem-text');
+      if (textArea && saved.problemText) textArea.value = saved.problemText;
+
+      // Hide new-problem fields if we know the problem
+      if (saved.problemId) {
+        document.getElementById('new-problem-fields').style.display = 'none';
+        const sel = document.getElementById('problem-select');
+        for (const opt of sel.options) {
+          if (opt.value === saved.problemId) { sel.value = saved.problemId; break; }
+        }
+      }
+
+      if (saved.status === 'done') {
+        // Completed while away — fetch and show result immediately
+        try {
+          const run = await api.get(`/runs/${saved.runId}`);
+          RunWatcher.clear();
+          activeRunId = run.id;
+          const title = historyData[saved.problemId]?.problem?.title || '';
+          await showResult(run, title);
+        } catch { RunWatcher.clear(); }
+
+      } else if (saved.status === 'failed') {
+        RunWatcher.clear();
+        document.getElementById('result-area').innerHTML =
+          `<div class="alert alert-error">The last deliberation failed. Please try again.</div>`;
+
+      } else {
+        // Still running — show the deliberating spinner
+        showPolling({ id: saved.runId, version: saved.version });
+        // Callbacks already registered above via RunWatcher.onChange — no extra poll needed
+      }
+    })();
 
     /* ════════════════════════════════════════════════════════════
        CHAT

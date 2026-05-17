@@ -17,7 +17,7 @@ from api.middleware.auth import get_current_user, require_admin, require_super_a
 from api.models.orm import (
     User, UserRole, Organization, DecisionRun, Problem,
     AgentOutput, Feedback, MonitoringFlag, BannedUser,
-    FlagType, FlagSeverity, UsageEvent,
+    FlagType, FlagSeverity, UsageEvent, SchedulerLog, SchedulerJobStatus,
 )
 from api.models.schemas import UserOut, OrgOut
 from pydantic import BaseModel
@@ -53,7 +53,10 @@ class FlagOut(BaseModel):
     flag_type: str
     severity: str
     user_id: Optional[str]
+    user_display_name: Optional[str]   # enriched — null if user not found
+    user_email: Optional[str]          # enriched
     org_id: Optional[str]
+    org_name: Optional[str]            # enriched
     run_id: Optional[str]
     request_id: Optional[str]
     prompt_excerpt: Optional[str]
@@ -64,6 +67,18 @@ class FlagOut(BaseModel):
     resolved_by: Optional[str]
     resolved_at: Optional[datetime]
     created_at: datetime
+    model_config = {"from_attributes": True}
+
+class SchedulerLogOut(BaseModel):
+    id: str
+    job_id: str
+    status: str
+    rows_affected: int
+    summary: str
+    detail: Optional[dict]
+    error_message: Optional[str]
+    duration_ms: Optional[int]
+    ran_at: datetime
     model_config = {"from_attributes": True}
 
 class OrgDrilldown(BaseModel):
@@ -438,6 +453,47 @@ async def superadmin_unban(
 
 # ── Monitoring tower endpoints ────────────────────────────────────────────────
 
+async def _enrich_flags(flags: list[MonitoringFlag], db: AsyncSession) -> list[FlagOut]:
+    """Joins user/org names onto flags so the UI never shows bare UUIDs."""
+    # Collect unique IDs to look up
+    user_ids = {f.user_id for f in flags if f.user_id}
+    org_ids  = {f.org_id  for f in flags if f.org_id}
+
+    users, orgs = {}, {}
+    if user_ids:
+        rows = await db.execute(
+            select(User.id, User.display_name, User.email).where(User.id.in_(user_ids))
+        )
+        for r in rows:
+            users[r.id] = {"display_name": r.display_name, "email": r.email}
+    if org_ids:
+        rows = await db.execute(
+            select(Organization.id, Organization.name).where(Organization.id.in_(org_ids))
+        )
+        for r in rows:
+            orgs[r.id] = r.name
+
+    out = []
+    for f in flags:
+        u = users.get(f.user_id, {})
+        out.append(FlagOut(
+            id=f.id, flag_type=f.flag_type, severity=f.severity,
+            user_id=f.user_id,
+            user_display_name=u.get("display_name"),
+            user_email=u.get("email"),
+            org_id=f.org_id,
+            org_name=orgs.get(f.org_id),
+            run_id=f.run_id, request_id=f.request_id,
+            prompt_excerpt=f.prompt_excerpt,
+            classifier_reason=f.classifier_reason,
+            classifier_severity=f.classifier_severity,
+            meta=f.meta, resolved=f.resolved,
+            resolved_by=f.resolved_by, resolved_at=f.resolved_at,
+            created_at=f.created_at,
+        ))
+    return out
+
+
 @superadmin_router.get("/flags", response_model=list[FlagOut])
 async def list_flags(
     flag_type: Optional[str] = None,
@@ -460,7 +516,8 @@ async def list_flags(
         q = q.where(MonitoringFlag.org_id == org_id)
     q = q.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(q)
-    return result.scalars().all()
+    flags = result.scalars().all()
+    return await _enrich_flags(flags, db)
 
 
 @superadmin_router.get("/flags/unresolved-count")
@@ -498,4 +555,28 @@ async def resolve_flag(
         flag.meta = {**flag.meta, "resolution_notes": req.notes}
     elif req.notes:
         flag.meta = {"resolution_notes": req.notes}
-    return flag
+    await db.commit()
+    enriched = await _enrich_flags([flag], db)
+    return enriched[0]
+
+
+# ── Scheduler logs endpoint ───────────────────────────────────────────────────
+
+@superadmin_router.get("/scheduler-logs", response_model=list[SchedulerLogOut])
+async def list_scheduler_logs(
+    job_id: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_super_admin),
+):
+    """Return scheduler job execution history, newest first."""
+    q = select(SchedulerLog).order_by(desc(SchedulerLog.ran_at))
+    if job_id:
+        q = q.where(SchedulerLog.job_id == job_id)
+    if status:
+        q = q.where(SchedulerLog.status == status)
+    q = q.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(q)
+    return result.scalars().all()

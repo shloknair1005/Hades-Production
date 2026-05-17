@@ -8,32 +8,149 @@
   <style>
     .sa-tabs-content > div { display: none; }
     .sa-tabs-content > div.active { display: block; }
-    .flag-row {
+
+    /* ── Flag rows ─────────────────────────────────────────────────────── */
+    .flag-item { border-bottom: 0.5px solid var(--border); }
+    .flag-item:last-child { border-bottom: none; }
+    .flag-item.critical .flag-summary-row { border-left: 3px solid #EC7063; }
+    .flag-item.high     .flag-summary-row { border-left: 3px solid var(--gold); }
+    .flag-item.medium   .flag-summary-row { border-left: 3px solid #5DADE2; }
+    .flag-item.resolved .flag-summary-row { opacity: 0.45; }
+
+    .flag-summary-row {
       display: grid;
-      grid-template-columns: 90px 80px 120px 1fr 120px 80px;
-      gap: 12px; align-items: center;
+      grid-template-columns: 90px 80px 130px 1fr 160px 90px 36px;
+      gap: 10px; align-items: center;
       padding: 10px 14px;
-      border-bottom: 0.5px solid var(--border);
       font-size: 0.82rem;
+      cursor: pointer;
       transition: background var(--transition);
+      user-select: none;
     }
-    .flag-row:hover { background: var(--bg-3); }
-    .flag-row.critical { border-left: 3px solid #EC7063; }
-    .flag-row.high     { border-left: 3px solid var(--gold); }
-    .flag-row.medium   { border-left: 3px solid #5DADE2; }
-    .flag-row.resolved { opacity: 0.45; }
+    .flag-summary-row:hover { background: var(--bg-3); }
+
+    .flag-chevron {
+      font-size: 0.7rem; color: var(--text-3);
+      transition: transform 0.2s; text-align: center;
+    }
+    .flag-item.open .flag-chevron { transform: rotate(180deg); }
+
+    /* ── Flag detail panel ─────────────────────────────────────────────── */
+    .flag-detail {
+      display: none;
+      padding: 0 14px 14px 14px;
+      background: var(--bg-2);
+      border-top: 1px solid var(--border);
+    }
+    .flag-item.open .flag-detail { display: block; }
+
+    .flag-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem 1.5rem;
+      margin-bottom: 0.75rem;
+      padding-top: 0.75rem;
+    }
+    .fd-field label {
+      display: block;
+      font-size: 0.68rem; font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-3); margin-bottom: 2px;
+    }
+    .fd-field .fd-val {
+      font-size: 0.82rem; color: var(--text-1);
+      word-break: break-all;
+    }
+    .fd-field .fd-val.mono { font-family: var(--font-mono); font-size: 0.78rem; }
+    .fd-field .fd-val.dim  { color: var(--text-3); }
+
+    .fd-meta-box {
+      background: var(--bg-4); border-radius: var(--radius);
+      padding: 0.6rem 0.75rem; font-size: 0.78rem;
+      font-family: var(--font-mono); color: var(--text-2);
+      white-space: pre-wrap; word-break: break-all;
+      max-height: 200px; overflow-y: auto;
+      margin-bottom: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    .fd-excerpt-box {
+      background: rgba(192,57,43,0.08); border: 1px solid rgba(192,57,43,0.25);
+      border-radius: var(--radius); padding: 0.6rem 0.75rem;
+      font-size: 0.8rem; color: var(--text-2);
+      white-space: pre-wrap; word-break: break-all;
+      max-height: 140px; overflow-y: auto;
+      margin-bottom: 0.75rem;
+    }
+    .fd-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .fd-notes-input {
+      flex: 1; min-width: 200px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 5px 10px;
+      font-size: 0.8rem; color: var(--text-1);
+    }
+    .fd-notes-input:focus { border-color: var(--border-gold); outline: none; }
+    .fd-section-label {
+      font-size: 0.68rem; font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-3); margin-bottom: 6px;
+    }
+
+    /* ── Scheduler logs ────────────────────────────────────────────────── */
+    .sched-item { border-bottom: 0.5px solid var(--border); }
+    .sched-item:last-child { border-bottom: none; }
+    .sched-item.success .sched-summary { border-left: 3px solid #58D68D; }
+    .sched-item.error   .sched-summary { border-left: 3px solid #EC7063; }
+    .sched-item.skipped .sched-summary { border-left: 3px solid var(--border); }
+
+    .sched-summary {
+      display: grid;
+      grid-template-columns: 200px 80px 60px 1fr 90px 28px;
+      gap: 10px; align-items: center;
+      padding: 9px 14px; font-size: 0.82rem;
+      cursor: pointer; transition: background var(--transition);
+      user-select: none;
+    }
+    .sched-summary:hover { background: var(--bg-3); }
+    .sched-item.open .sched-chevron { transform: rotate(180deg); }
+    .sched-chevron { font-size: 0.7rem; color: var(--text-3); transition: transform 0.2s; }
+
+    .sched-detail {
+      display: none; padding: 0 14px 14px;
+      background: var(--bg-2); border-top: 1px solid var(--border);
+    }
+    .sched-item.open .sched-detail { display: block; }
+
+    .sched-row-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.78rem; margin-top: 0.75rem;
+    }
+    .sched-row-table th {
+      font-size: 0.68rem; font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--text-3); padding: 4px 8px;
+      text-align: left; border-bottom: 1px solid var(--border);
+      background: var(--bg-3);
+    }
+    .sched-row-table td {
+      padding: 5px 8px; color: var(--text-2);
+      font-family: var(--font-mono); font-size: 0.76rem;
+      border-bottom: 0.5px solid var(--border);
+      vertical-align: top; word-break: break-all;
+    }
+    .sched-row-table tr:last-child td { border-bottom: none; }
+    .sched-row-table tr:hover td { background: var(--bg-3); }
+
+    /* ── Misc ─────────────────────────────────────────────────────────── */
     .pulse-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: #EC7063; display: inline-block;
-      animation: pulse 1.5s ease-in-out infinite;
-      margin-right: 6px;
+      animation: pulse 1.5s ease-in-out infinite; margin-right: 6px;
     }
     .pulse-dot.clear { background: #58D68D; animation: none; }
     .alert-counter {
       font-family: var(--font-mono); font-size: 0.75rem;
       padding: 2px 8px; border-radius: 12px;
-      background: rgba(192,57,43,0.15); color: #EC7063;
-      font-weight: 500;
+      background: rgba(192,57,43,0.15); color: #EC7063; font-weight: 500;
     }
     .alert-counter.zero { background: rgba(39,174,96,0.1); color: #58D68D; }
     .org-card {
@@ -49,17 +166,10 @@
       display: grid;
       grid-template-columns: 1fr 160px 80px 60px 60px 100px;
       gap: 8px; align-items: center;
-      padding: 8px 14px; border-bottom: 0.5px solid var(--border);
-      font-size: 0.82rem;
+      padding: 8px 14px; border-bottom: 0.5px solid var(--border); font-size: 0.82rem;
     }
     .search-bar { display: flex; gap: 8px; margin-bottom: 1.5rem; }
     .search-bar .input { flex: 1; }
-    .excerpt-box {
-      background: var(--bg-4); border-radius: var(--radius);
-      padding: 0.75rem; font-size: 0.8rem; color: var(--text-2);
-      font-family: var(--font-mono); margin-top: 0.5rem;
-      word-break: break-all; max-height: 120px; overflow-y: auto;
-    }
   </style>
 </head>
 <body>
@@ -69,27 +179,27 @@
     <div class="page-header">
       <div>
         <div class="page-title">
-          <span id="pulse-dot" class="pulse-dot"></span>
-          Super Admin
+          <span id="pulse-dot" class="pulse-dot"></span>Super Admin
         </div>
         <div class="page-subtitle">
-          Platform monitoring tower &amp; management.
-          Unresolved flags: <span id="flag-counter" class="alert-counter">…</span>
+          Platform monitoring &amp; management.
+          Flags: <span id="flag-counter" class="alert-counter">…</span>
           &nbsp;Critical: <span id="critical-counter" class="alert-counter">…</span>
         </div>
       </div>
     </div>
 
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('monitor', this)">🚨 Monitor</button>
-      <button class="tab" onclick="switchTab('platform', this)">◈ Platform</button>
-      <button class="tab" onclick="switchTab('orgs', this)">⌂ Orgs</button>
-      <button class="tab" onclick="switchTab('users', this)">👤 Users</button>
+      <button class="tab active" onclick="switchTab('monitor',this)">🚨 Monitor</button>
+      <button class="tab" onclick="switchTab('scheduler',this)">⏱ Scheduler</button>
+      <button class="tab" onclick="switchTab('platform',this)">◈ Platform</button>
+      <button class="tab" onclick="switchTab('orgs',this)">⌂ Orgs</button>
+      <button class="tab" onclick="switchTab('users',this)">👤 Users</button>
     </div>
 
     <div class="sa-tabs-content">
 
-      <!-- Monitor -->
+      <!-- ── Monitor ──────────────────────────────────────────────────── -->
       <div id="tab-monitor" class="active">
         <div id="alert-monitor"></div>
         <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px">
@@ -120,14 +230,51 @@
         </div>
 
         <div class="card" style="padding:0">
-          <div class="flag-row" style="font-size:0.72rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3)">
-            <span>Type</span><span>Severity</span><span>Time</span><span>Details</span><span>User/Org</span><span>Action</span>
+          <!-- Header row -->
+          <div class="flag-summary-row" style="font-size:0.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3);cursor:default">
+            <span>Type</span><span>Severity</span><span>Time</span>
+            <span>Summary</span><span>User / Org</span><span>Status</span><span></span>
           </div>
-          <div id="flags-list"><div class="loading-row"><div class="spinner"></div></div></div>
+          <div id="flags-list">
+            <div class="loading-row"><div class="spinner"></div></div>
+          </div>
         </div>
       </div>
 
-      <!-- Platform -->
+      <!-- ── Scheduler ────────────────────────────────────────────────── -->
+      <div id="tab-scheduler">
+        <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="select" id="sched-filter-job" style="width:auto;height:32px;font-size:0.78rem" onchange="loadSchedLogs()">
+              <option value="">All jobs</option>
+              <option value="purge_standard_logs">purge_standard_logs</option>
+              <option value="purge_error_logs">purge_error_logs</option>
+              <option value="purge_rate_limit_windows">purge_rate_limit_windows</option>
+              <option value="aggregate_trust_scores">aggregate_trust_scores</option>
+              <option value="purge_monitoring_flags">purge_monitoring_flags</option>
+            </select>
+            <select class="select" id="sched-filter-status" style="width:auto;height:32px;font-size:0.78rem" onchange="loadSchedLogs()">
+              <option value="">All statuses</option>
+              <option value="success">Success</option>
+              <option value="skipped">Skipped</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="loadSchedLogs()">↻ Refresh</button>
+        </div>
+
+        <div class="card" style="padding:0">
+          <div class="sched-summary" style="font-size:0.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3);cursor:default">
+            <span>Job</span><span>Status</span><span>Rows</span><span>Summary</span>
+            <span>Duration</span><span></span>
+          </div>
+          <div id="sched-list">
+            <div class="loading-row"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Platform ─────────────────────────────────────────────────── -->
       <div id="tab-platform">
         <div id="platform-stats" class="grid-4 mb-3">
           <div class="loading-row" style="grid-column:1/-1"><div class="spinner"></div></div>
@@ -144,7 +291,7 @@
         </div>
       </div>
 
-      <!-- Orgs -->
+      <!-- ── Orgs ──────────────────────────────────────────────────────── -->
       <div id="tab-orgs">
         <div id="alert-orgs"></div>
         <div id="orgs-grid" class="grid-3">
@@ -159,14 +306,14 @@
         </div>
       </div>
 
-      <!-- Users -->
+      <!-- ── Users ─────────────────────────────────────────────────────── -->
       <div id="tab-users">
         <div id="alert-users"></div>
         <div class="search-bar">
           <input class="input" id="user-search" placeholder="Search by name or email…" oninput="searchUsers()">
         </div>
         <div class="card" style="padding:0">
-          <div class="member-row" style="font-size:0.72rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3)">
+          <div class="member-row" style="font-size:0.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3)">
             <span>Name / Email</span><span>Org</span><span>Role</span><span>Runs</span><span>Banned</span><span>Actions</span>
           </div>
           <div id="users-list"><div class="empty"><div class="empty-sub">Search for a user above.</div></div></div>
@@ -181,15 +328,13 @@
     if (!Auth.requireLogin()) throw '';
     const user = Auth.user;
     if (!user || user.role !== 'super_admin') {
-      window.location.href = '/static/index.html';
-      throw 'not super_admin';
+      window.location.href = '/static/index.html'; throw 'not super_admin';
     }
     renderNav('superadmin');
 
-    let pollTimer = null;
-    let searchTimer = null;
+    let pollTimer = null, searchTimer = null;
 
-    // ── Polling ───────────────────────────────────────────────────────────────
+    /* ── Polling ─────────────────────────────────────────────────────── */
     async function pollCounts() {
       try {
         const d = await api.get('/superadmin/flags/unresolved-count');
@@ -203,74 +348,239 @@
         dot.className = 'pulse-dot' + (d.unresolved === 0 ? ' clear' : '');
       } catch {}
     }
+    function startPolling() { pollCounts(); pollTimer = setInterval(pollCounts, 5000); }
 
-    function startPolling() {
-      pollCounts();
-      pollTimer = setInterval(pollCounts, 5000);
-    }
-
-    // ── Tab switching ─────────────────────────────────────────────────────────
+    /* ── Tabs ────────────────────────────────────────────────────────── */
     function switchTab(key, btn) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       btn.classList.add('active');
       document.querySelectorAll('.sa-tabs-content > div').forEach(d => d.classList.remove('active'));
       document.getElementById(`tab-${key}`).classList.add('active');
-      if (key === 'platform') loadPlatform();
-      if (key === 'orgs') loadOrgs();
+      if (key === 'platform')  loadPlatform();
+      if (key === 'orgs')      loadOrgs();
+      if (key === 'scheduler') loadSchedLogs();
     }
 
-    // ── Monitor tab ───────────────────────────────────────────────────────────
+    /* ── Helpers ─────────────────────────────────────────────────────── */
+    function esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function dimIfBlank(s, fallback = '—') {
+      return s ? `<span class="fd-val mono">${esc(s)}</span>`
+               : `<span class="fd-val dim">${fallback}</span>`;
+    }
+
+    /* ── Monitor tab ─────────────────────────────────────────────────── */
     async function loadFlags() {
       const type     = document.getElementById('filter-type').value;
       const severity = document.getElementById('filter-severity').value;
       const resolved = document.getElementById('filter-resolved').value;
       let url = '/superadmin/flags?page_size=100';
-      if (type) url += `&flag_type=${type}`;
-      if (severity) url += `&severity=${severity}`;
+      if (type)          url += `&flag_type=${type}`;
+      if (severity)      url += `&severity=${severity}`;
       if (resolved !== '') url += `&resolved=${resolved}`;
 
-      document.getElementById('flags-list').innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+      document.getElementById('flags-list').innerHTML =
+        `<div class="loading-row"><div class="spinner"></div></div>`;
       try {
         const flags = await api.get(url);
         if (!flags.length) {
-          document.getElementById('flags-list').innerHTML = `<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">No flags</div></div>`;
+          document.getElementById('flags-list').innerHTML =
+            `<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">No flags</div></div>`;
           return;
         }
-
-        document.getElementById('flags-list').innerHTML = flags.map(f => `
-          <div class="flag-row ${f.severity} ${f.resolved ? 'resolved' : ''}">
-            <span><span class="badge badge-${f.flag_type === 'unethical_prompt' ? 'failed' : f.flag_type === 'http_5xx' || f.flag_type === 'failed_run' ? 'failed' : 'running'}" style="font-size:0.68rem">${f.flag_type.replace('_',' ')}</span></span>
-            <span><span class="badge badge-${f.severity === 'critical' ? 'failed' : f.severity === 'high' ? 'pending' : 'running'}">${f.severity}</span></span>
-            <span class="text-dim mono text-xs">${timeAgo(f.created_at)}</span>
-            <div>
-              <div class="text-sm" style="color:var(--text)">${f.meta ? JSON.stringify(f.meta).slice(0,80) : '—'}</div>
-              ${f.prompt_excerpt ? `<div class="excerpt-box">${f.prompt_excerpt}</div>` : ''}
-              ${f.classifier_reason ? `<div class="text-xs text-dim mt-1">LLM: ${f.classifier_reason}</div>` : ''}
-            </div>
-            <div>
-              <div class="text-xs mono text-dim">${f.user_id ? f.user_id.slice(0,8) : '—'}</div>
-              <div class="text-xs mono text-dim">${f.org_id ? f.org_id.slice(0,8) : '—'}</div>
-            </div>
-            <div>
-              ${!f.resolved ? `<button class="btn btn-secondary btn-sm" onclick="resolveFlag('${f.id}', this)">Resolve</button>` : `<span class="text-xs text-dim">Resolved</span>`}
-            </div>
-          </div>
-        `).join('');
+        document.getElementById('flags-list').innerHTML = flags.map(f => flagItemHTML(f)).join('');
       } catch (err) {
         showAlert('alert-monitor', err.detail || 'Failed to load flags.', 'error');
       }
     }
 
-    async function resolveFlag(flagId, btn) {
-      btn.disabled = true; btn.textContent = '…';
-      try {
-        await api.patch(`/superadmin/flags/${flagId}/resolve`, {});
-        loadFlags();
-        pollCounts();
-      } catch { btn.disabled = false; btn.textContent = 'Resolve'; }
+    function flagItemHTML(f) {
+      const typeLabel = f.flag_type.replace(/_/g, ' ');
+      const badgeCls  = ['http_5xx','failed_run','unethical_prompt'].includes(f.flag_type)
+                        ? 'failed' : 'running';
+      const sevCls    = f.severity === 'critical' ? 'failed'
+                      : f.severity === 'high'     ? 'pending' : 'running';
+
+      // User/org summary shown in the collapsed row
+      const userSummary = f.user_display_name
+        ? `<div class="text-sm" style="color:var(--text-1)">${esc(f.user_display_name)}</div>
+           <div class="text-xs mono text-dim">${esc(f.user_email || '')}</div>`
+        : f.user_id
+          ? `<div class="text-xs mono text-dim">${f.user_id.slice(0,12)}…</div>`
+          : '<span class="text-dim">—</span>';
+
+      // Meta summary for the collapsed row
+      const metaSnippet = f.meta
+        ? esc(JSON.stringify(f.meta).slice(0, 70)) + (JSON.stringify(f.meta).length > 70 ? '…' : '')
+        : '—';
+
+      // Full detail panel
+      const metaFull = f.meta ? JSON.stringify(f.meta, null, 2) : null;
+      const resolveBtn = !f.resolved
+        ? `<input class="fd-notes-input" placeholder="Resolution notes (optional)…" id="notes-${f.id}">
+           <button class="btn btn-primary btn-sm" onclick="resolveFlag('${f.id}')">Resolve</button>`
+        : `<span class="text-xs text-dim">Resolved ${f.resolved_at ? timeAgo(f.resolved_at) : ''}</span>`;
+
+      return `
+        <div class="flag-item ${f.severity} ${f.resolved ? 'resolved' : ''}" id="flag-${f.id}">
+          <div class="flag-summary-row" onclick="toggleFlag('${f.id}')">
+            <span><span class="badge badge-${badgeCls}" style="font-size:0.68rem">${esc(typeLabel)}</span></span>
+            <span><span class="badge badge-${sevCls}">${esc(f.severity)}</span></span>
+            <span class="text-dim mono text-xs">${timeAgo(f.created_at)}</span>
+            <div class="text-sm" style="color:var(--text-2)">${metaSnippet}</div>
+            <div>${userSummary}</div>
+            <span>${f.resolved
+              ? '<span class="badge badge-done" style="font-size:0.68rem">Resolved</span>'
+              : '<span class="badge badge-pending" style="font-size:0.68rem">Open</span>'}</span>
+            <span class="flag-chevron">▾</span>
+          </div>
+
+          <div class="flag-detail">
+            <div class="flag-detail-grid">
+              <div class="fd-field"><label>Flag ID</label>${dimIfBlank(f.id)}</div>
+              <div class="fd-field"><label>Created</label><span class="fd-val">${new Date(f.created_at).toLocaleString()}</span></div>
+              <div class="fd-field"><label>User</label>
+                ${f.user_display_name
+                  ? `<span class="fd-val">${esc(f.user_display_name)} <span class="text-dim">&lt;${esc(f.user_email || '')}&gt;</span></span>`
+                  : dimIfBlank(f.user_id)}</div>
+              <div class="fd-field"><label>User ID</label>${dimIfBlank(f.user_id)}</div>
+              <div class="fd-field"><label>Org</label>${dimIfBlank(f.org_name)}</div>
+              <div class="fd-field"><label>Org ID</label>${dimIfBlank(f.org_id)}</div>
+              ${f.run_id ? `<div class="fd-field"><label>Run ID</label>${dimIfBlank(f.run_id)}</div>` : ''}
+              ${f.request_id ? `<div class="fd-field"><label>Request ID</label>${dimIfBlank(f.request_id)}</div>` : ''}
+              ${f.classifier_severity != null ? `<div class="fd-field"><label>Classifier Score</label><span class="fd-val">${f.classifier_severity}/10</span></div>` : ''}
+              ${f.classifier_reason ? `<div class="fd-field" style="grid-column:1/-1"><label>Classifier Reason</label><span class="fd-val">${esc(f.classifier_reason)}</span></div>` : ''}
+            </div>
+
+            ${f.prompt_excerpt ? `
+              <div class="fd-section-label">Prompt Excerpt</div>
+              <div class="fd-excerpt-box">${esc(f.prompt_excerpt)}</div>` : ''}
+
+            ${metaFull ? `
+              <div class="fd-section-label">Full Metadata</div>
+              <div class="fd-meta-box">${esc(metaFull)}</div>` : ''}
+
+            <div class="fd-actions">${resolveBtn}</div>
+          </div>
+        </div>`;
     }
 
-    // ── Platform tab ──────────────────────────────────────────────────────────
+    function toggleFlag(id) {
+      document.getElementById(`flag-${id}`).classList.toggle('open');
+    }
+
+    async function resolveFlag(flagId) {
+      const notes = document.getElementById(`notes-${flagId}`)?.value || '';
+      try {
+        await api.patch(`/superadmin/flags/${flagId}/resolve`, { notes: notes || null });
+        loadFlags();
+        pollCounts();
+      } catch (err) {
+        showAlert('alert-monitor', err.detail || 'Failed to resolve.', 'error');
+      }
+    }
+
+    /* ── Scheduler tab ───────────────────────────────────────────────── */
+    async function loadSchedLogs() {
+      const job    = document.getElementById('sched-filter-job').value;
+      const status = document.getElementById('sched-filter-status').value;
+      let url = '/superadmin/scheduler-logs?page_size=100';
+      if (job)    url += `&job_id=${job}`;
+      if (status) url += `&status=${status}`;
+
+      document.getElementById('sched-list').innerHTML =
+        `<div class="loading-row"><div class="spinner"></div></div>`;
+      try {
+        const logs = await api.get(url);
+        if (!logs.length) {
+          document.getElementById('sched-list').innerHTML =
+            `<div class="empty"><div class="empty-sub">No scheduler logs yet — jobs haven't fired, or logging just started.</div></div>`;
+          return;
+        }
+        document.getElementById('sched-list').innerHTML = logs.map(l => schedItemHTML(l)).join('');
+      } catch (err) {
+        document.getElementById('sched-list').innerHTML =
+          `<div class="empty"><div class="empty-sub">Failed to load scheduler logs.</div></div>`;
+      }
+    }
+
+    function schedItemHTML(l) {
+      const statusCls  = l.status === 'success' ? 'done'
+                       : l.status === 'error'   ? 'failed' : 'private';
+      const rowsBadge  = l.rows_affected > 0
+        ? `<span class="badge badge-running">${l.rows_affected}</span>`
+        : `<span class="text-dim">0</span>`;
+      const durStr     = l.duration_ms != null ? `${l.duration_ms}ms` : '—';
+
+      // Build detail table from detail.rows if present
+      let detailHTML = '';
+      const d = l.detail || {};
+
+      if (l.error_message) {
+        detailHTML += `
+          <div class="fd-section-label" style="margin-top:0.75rem;color:#EC7063">Error</div>
+          <div class="fd-meta-box" style="border-color:rgba(192,57,43,0.3)">${esc(l.error_message)}</div>`;
+      }
+
+      if (d.note) {
+        detailHTML += `<div class="text-xs text-dim" style="margin:0.5rem 0">⚠ ${esc(d.note)}</div>`;
+      }
+
+      if (d.rows && d.rows.length > 0) {
+        // Build column keys from first row (excluding 'reason' and 'table', shown separately)
+        const sample    = d.rows[0];
+        const skipCols  = new Set(['reason', 'table']);
+        const cols      = Object.keys(sample).filter(k => !skipCols.has(k));
+        const headerRow = cols.map(c => `<th>${esc(c)}</th>`).join('') + '<th>reason</th>';
+        const bodyRows  = d.rows.map(r =>
+          cols.map(c => `<td>${esc(r[c] ?? '—')}</td>`).join('') +
+          `<td style="color:var(--text-3)">${esc(r.reason ?? '—')}</td>`
+        ).join('</tr><tr>');
+
+        detailHTML += `
+          <div class="fd-section-label" style="margin-top:0.75rem">
+            Affected rows${d.truncated ? ' (preview — see note above)' : ''}
+          </div>
+          <div style="overflow-x:auto">
+            <table class="sched-row-table">
+              <thead><tr>${headerRow}</tr></thead>
+              <tbody><tr>${bodyRows}</tr></tbody>
+            </table>
+          </div>`;
+      } else if (l.rows_affected === 0) {
+        detailHTML += `<div class="text-xs text-dim" style="margin-top:0.75rem">Nothing to do — no rows matched the condition.</div>`;
+      }
+
+      // Extra metadata (period, threshold, etc.) shown in a small meta box
+      const metaKeys = Object.keys(d).filter(k => !['rows','truncated','note'].includes(k));
+      if (metaKeys.length) {
+        const metaObj = {};
+        metaKeys.forEach(k => { metaObj[k] = d[k]; });
+        detailHTML += `
+          <div class="fd-section-label" style="margin-top:0.75rem">Job metadata</div>
+          <div class="fd-meta-box">${esc(JSON.stringify(metaObj, null, 2))}</div>`;
+      }
+
+      return `
+        <div class="sched-item ${l.status}" id="sched-${l.id}">
+          <div class="sched-summary" onclick="toggleSched('${l.id}')">
+            <span class="mono text-xs" style="color:var(--text-2)">${esc(l.job_id)}</span>
+            <span><span class="badge badge-${statusCls}" style="font-size:0.68rem">${esc(l.status)}</span></span>
+            <span>${rowsBadge}</span>
+            <span class="text-sm" style="color:var(--text-2)">${esc(l.summary)}</span>
+            <span class="text-xs mono text-dim">${durStr} · ${timeAgo(l.ran_at)}</span>
+            <span class="sched-chevron">▾</span>
+          </div>
+          <div class="sched-detail">${detailHTML || '<div class="text-xs text-dim" style="padding-top:0.75rem">No detail available.</div>'}</div>
+        </div>`;
+    }
+
+    function toggleSched(id) {
+      document.getElementById(`sched-${id}`).classList.toggle('open');
+    }
+
+    /* ── Platform tab ────────────────────────────────────────────────── */
     async function loadPlatform() {
       try {
         const d = await api.get('/superadmin/platform');
@@ -278,38 +588,39 @@
           <div class="stat stat-gold"><div class="stat-label">Total Runs</div><div class="stat-value">${d.total_runs}</div></div>
           <div class="stat"><div class="stat-label">Total Users</div><div class="stat-value">${d.total_users}</div></div>
           <div class="stat"><div class="stat-label">Organisations</div><div class="stat-value">${d.total_orgs}</div></div>
-          <div class="stat"><div class="stat-label">Unresolved Flags</div><div class="stat-value" style="color:${d.unresolved_flags > 0 ? '#EC7063' : 'var(--text)'}">${d.unresolved_flags}</div></div>
-        `;
+          <div class="stat"><div class="stat-label">Unresolved Flags</div><div class="stat-value" style="color:${d.unresolved_flags > 0 ? '#EC7063' : 'var(--text)'}">
+            ${d.unresolved_flags}</div></div>`;
 
         const renderBars = (obj, containerId) => {
           const max = Math.max(...Object.values(obj), 1);
-          document.getElementById(containerId).innerHTML = Object.entries(obj).map(([k,v]) => `
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:0.82rem">
-              <span style="width:130px;color:var(--text-2);font-family:var(--font-mono)">${k}</span>
-              <div style="flex:1;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden">
-                <div style="width:${(v/max*100).toFixed(1)}%;height:100%;background:var(--gold);border-radius:3px"></div>
-              </div>
-              <span style="width:30px;text-align:right;color:var(--text-3);font-family:var(--font-mono)">${v}</span>
-            </div>`).join('');
+          document.getElementById(containerId).innerHTML =
+            Object.entries(obj).map(([k, v]) => `
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:0.82rem">
+                <span style="width:130px;color:var(--text-2);font-family:var(--font-mono)">${esc(k)}</span>
+                <div style="flex:1;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden">
+                  <div style="width:${(v/max*100).toFixed(1)}%;height:100%;background:var(--gold);border-radius:3px"></div>
+                </div>
+                <span style="width:30px;text-align:right;color:var(--text-3);font-family:var(--font-mono)">${v}</span>
+              </div>`).join('');
         };
         renderBars(d.flags_by_type, 'flags-by-type');
         renderBars(d.flags_by_severity, 'flags-by-severity');
       } catch {}
     }
 
-    // ── Orgs tab ──────────────────────────────────────────────────────────────
+    /* ── Orgs tab ────────────────────────────────────────────────────── */
     async function loadOrgs() {
       try {
         const orgs = await api.get('/superadmin/orgs');
         document.getElementById('orgs-grid').innerHTML = orgs.map(o => `
-          <div class="org-card" onclick="loadOrgMembers('${o.org_id}', '${o.org_name}')">
-            <div class="org-card-name">${o.org_name}</div>
+          <div class="org-card" onclick="loadOrgMembers('${o.org_id}','${esc(o.org_name)}')">
+            <div class="org-card-name">${esc(o.org_name)}</div>
             <div class="org-card-meta">
               <span>${o.total_users} users</span>
               <span>${o.total_runs} runs</span>
               <span>${o.failed_runs} failed</span>
               ${o.unresolved_flags > 0 ? `<span class="org-card-flags">⚠ ${o.unresolved_flags} flags</span>` : ''}
-              <span class="badge badge-${o.plan === 'enterprise' ? 'done' : o.plan === 'pro' ? 'running' : 'private'}">${o.plan}</span>
+              <span class="badge badge-${o.plan === 'enterprise' ? 'done' : o.plan === 'pro' ? 'running' : 'private'}">${esc(o.plan)}</span>
             </div>
           </div>`).join('');
       } catch {}
@@ -318,57 +629,60 @@
     async function loadOrgMembers(orgId, orgName) {
       document.getElementById('org-detail').style.display = 'block';
       document.getElementById('org-detail-title').textContent = `Members — ${orgName}`;
-      document.getElementById('org-members-list').innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+      document.getElementById('org-members-list').innerHTML =
+        `<div class="loading-row"><div class="spinner"></div></div>`;
       try {
         const members = await api.get(`/superadmin/orgs/${orgId}/members`);
         document.getElementById('org-members-list').innerHTML = `
           <div class="card" style="padding:0">
-            <div class="member-row" style="font-size:0.72rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3)">
+            <div class="member-row" style="font-size:0.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);background:var(--bg-3)">
               <span>Name / Email</span><span>Role</span><span>Runs</span><span>Last active</span><span>Banned</span><span>Actions</span>
             </div>
             ${members.map(m => `
               <div class="member-row">
                 <div>
-                  <div class="fw-500 text-sm">${m.display_name}</div>
-                  <div class="text-xs text-dim mono">${m.email}</div>
+                  <div class="fw-500 text-sm">${esc(m.display_name)}</div>
+                  <div class="text-xs text-dim mono">${esc(m.email)}</div>
                 </div>
-                <span><span class="badge badge-${m.role === 'admin' ? 'running' : 'private'}">${m.role}</span></span>
+                <span><span class="badge badge-${m.role === 'admin' ? 'running' : 'private'}">${esc(m.role)}</span></span>
                 <span class="mono text-sm">${m.total_runs}</span>
                 <span class="text-xs text-dim">${m.last_active ? timeAgo(m.last_active) : '—'}</span>
                 <span>${m.is_banned ? '<span class="text-xs" style="color:#EC7063">banned</span>' : '<span class="text-xs text-dim">—</span>'}</span>
                 <div style="display:flex;gap:4px">
                   ${m.is_banned
-                    ? `<button class="btn btn-secondary btn-sm" onclick="superUnban('${m.user_id}', this)">Unban</button>`
-                    : `<button class="btn btn-danger btn-sm" onclick="superBan('${m.user_id}', this)">Ban</button>`}
+                    ? `<button class="btn btn-secondary btn-sm" onclick="superUnban('${m.user_id}',this)">Unban</button>`
+                    : `<button class="btn btn-danger btn-sm" onclick="superBan('${m.user_id}',this)">Ban</button>`}
                 </div>
               </div>`).join('')}
           </div>`;
       } catch {}
     }
 
-    // ── Users tab ─────────────────────────────────────────────────────────────
+    /* ── Users tab ───────────────────────────────────────────────────── */
     function searchUsers() {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(async () => {
         const q = document.getElementById('user-search').value.trim();
         if (q.length < 2) return;
-        document.getElementById('users-list').innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+        document.getElementById('users-list').innerHTML =
+          `<div class="loading-row"><div class="spinner"></div></div>`;
         try {
           const users = await api.get(`/superadmin/users/search?q=${encodeURIComponent(q)}`);
           if (!users.length) {
-            document.getElementById('users-list').innerHTML = `<div class="empty"><div class="empty-sub">No users found.</div></div>`;
+            document.getElementById('users-list').innerHTML =
+              `<div class="empty"><div class="empty-sub">No users found.</div></div>`;
             return;
           }
           document.getElementById('users-list').innerHTML = users.map(u => `
             <div class="member-row">
               <div>
-                <div class="fw-500 text-sm">${u.display_name}</div>
-                <div class="text-xs text-dim mono">${u.email}</div>
+                <div class="fw-500 text-sm">${esc(u.display_name)}</div>
+                <div class="text-xs text-dim mono">${esc(u.email)}</div>
               </div>
               <span class="text-xs mono text-dim">${u.org_id ? u.org_id.slice(0,8) : '—'}</span>
               <span>
                 <select class="select" style="width:auto;height:28px;font-size:0.75rem"
-                        onchange="superChangeRole('${u.id}', this.value)">
+                        onchange="superChangeRole('${u.id}',this.value)">
                   <option ${u.role==='member'?'selected':''} value="member">member</option>
                   <option ${u.role==='power_user'?'selected':''} value="power_user">power_user</option>
                   <option ${u.role==='admin'?'selected':''} value="admin">admin</option>
@@ -378,7 +692,7 @@
               <span class="mono text-sm">—</span>
               <span class="text-xs text-dim">—</span>
               <div style="display:flex;gap:4px">
-                <button class="btn btn-danger btn-sm" onclick="superBan('${u.id}', this)">Ban</button>
+                <button class="btn btn-danger btn-sm" onclick="superBan('${u.id}',this)">Ban</button>
               </div>
             </div>`).join('');
         } catch (err) {
@@ -416,7 +730,7 @@
       } catch { btn.disabled = false; }
     }
 
-    // ── Init ──────────────────────────────────────────────────────────────────
+    /* ── Init ────────────────────────────────────────────────────────── */
     loadFlags();
     startPolling();
   </script>

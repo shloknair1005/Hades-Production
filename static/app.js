@@ -180,3 +180,140 @@ function setLoading(btnId, loading, label = 'Submit') {
 function accordion(el) {
   el.classList.toggle('open');
 }
+/* ── RunWatcher — global background poller ───────────────────────────────────
+   Lives in app.js so it runs on EVERY page.
+   Polls the active run every 3s regardless of which page the user is on.
+   Other pages (index.html) register callbacks to react to state changes.
+   State is persisted in localStorage so page navigation doesn't lose it.
+────────────────────────────────────────────────────────────────────────────── */
+const RunWatcher = {
+  _KEY: 'hades_active_run',
+  _timer: null,
+  _callbacks: [],          // registered by index.html when it's open
+  _INTERVAL: 3000,
+  _MAX_AGE_MS: 10 * 60 * 1000,   // forget runs older than 10 min
+
+  /* Save a new run as active */
+  start(run, problemId, problemText) {
+    localStorage.setItem(this._KEY, JSON.stringify({
+      runId: run.id,
+      version: run.version,
+      problemId,
+      problemText,
+      status: run.status,
+      savedAt: Date.now(),
+    }));
+    this._poll();
+    if (!this._timer) this._timer = setInterval(() => this._poll(), this._INTERVAL);
+    this._updateNavBadge('running');
+  },
+
+  /* Read persisted state — returns null if none / expired */
+  get() {
+    try {
+      const raw = localStorage.getItem(this._KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (Date.now() - s.savedAt > this._MAX_AGE_MS) { this.clear(); return null; }
+      return s;
+    } catch { return null; }
+  },
+
+  /* Register a callback (index.html registers on load) */
+  onChange(fn) { this._callbacks.push(fn); },
+
+  /* Remove all callbacks (called when index.html unloads — not strictly needed) */
+  clearCallbacks() { this._callbacks = []; },
+
+  /* Stop watching and remove state */
+  clear() {
+    clearInterval(this._timer);
+    this._timer = null;
+    localStorage.removeItem(this._KEY);
+    this._callbacks = [];
+    this._updateNavBadge(null);
+  },
+
+  /* Resume watching a run that was already in progress (called by index.html on load) */
+  resume() {
+    const s = this.get();
+    if (!s) return null;
+    if (s.status === 'done' || s.status === 'failed') return s;
+    // Re-attach poll if not already running
+    if (!this._timer) this._timer = setInterval(() => this._poll(), this._INTERVAL);
+    this._updateNavBadge('running');
+    return s;
+  },
+
+  /* Internal poll — fires every 3s on any page */
+  async _poll() {
+    const s = this.get();
+    if (!s) { clearInterval(this._timer); this._timer = null; return; }
+    if (s.status === 'done' || s.status === 'failed') {
+      clearInterval(this._timer); this._timer = null;
+      this._updateNavBadge(null);
+      return;
+    }
+    try {
+      const run = await api.get(`/runs/${s.runId}`);
+      // Update persisted status
+      const updated = { ...s, status: run.status };
+      localStorage.setItem(this._KEY, JSON.stringify(updated));
+
+      if (run.status === 'done' || run.status === 'failed') {
+        clearInterval(this._timer);
+        this._timer = null;
+        this._updateNavBadge(run.status === 'done' ? 'done' : 'failed');
+        // Notify any registered callbacks (index.html if it's open)
+        this._callbacks.forEach(fn => fn(run, s.problemId));
+        // If user is NOT on council page, update nav to signal completion
+        if (!window.location.pathname.endsWith('index.html') &&
+          window.location.pathname !== '/') {
+          this._flashNav(run.status);
+        }
+      } else {
+        this._callbacks.forEach(fn => fn(run, s.problemId));
+      }
+    } catch { }
+  },
+
+  /* Show a pulsing dot next to the Council nav link while running */
+  _updateNavBadge(status) {
+    const link = document.querySelector('.nav-link[href="/static/index.html"]');
+    if (!link) return;
+    // Remove existing badge
+    link.querySelectorAll('.run-nav-badge').forEach(el => el.remove());
+    if (!status) return;
+    const dot = document.createElement('span');
+    dot.className = 'run-nav-badge';
+    dot.style.cssText = `
+      display:inline-block;width:7px;height:7px;border-radius:50%;
+      margin-left:5px;vertical-align:middle;flex-shrink:0;
+      background:${status === 'done' ? '#58D68D' : status === 'failed' ? '#EC7063' : '#C9A84C'};
+      ${status === 'running' ? 'animation:pulse 1.5s ease-in-out infinite;' : ''}
+    `;
+    link.appendChild(dot);
+  },
+
+  /* Briefly highlight the nav link when deliberation completes on another page */
+  _flashNav(status) {
+    const link = document.querySelector('.nav-link[href="/static/index.html"]');
+    if (!link) return;
+    const msg = status === 'done' ? '✓ Verdict ready' : '✗ Run failed';
+    const orig = link.textContent.trim();
+    link.style.color = status === 'done' ? '#58D68D' : '#EC7063';
+    link.title = msg;
+    setTimeout(() => {
+      link.style.color = '';
+      link.title = '';
+    }, 8000);
+  },
+};
+
+/* Auto-resume on every page load if there's an active run */
+document.addEventListener('DOMContentLoaded', () => {
+  const s = RunWatcher.get();
+  if (s && s.status !== 'done' && s.status !== 'failed') {
+    RunWatcher.resume();
+  }
+});
